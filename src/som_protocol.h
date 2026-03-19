@@ -60,6 +60,7 @@ static inline int som_protocol_init(void) { return 0; }
 #endif
 
 int som_cmd(uint8_t cmd, void *data, size_t data_len, uint32_t timeout);
+int som_get_pvt_info(struct som_pvt_info *info);
 bool som_is_alive(void);
 void som_set_alive(bool alive);
 

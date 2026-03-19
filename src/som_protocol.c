@@ -6,10 +6,12 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/shell/shell.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
 
 #include "som_protocol.h"
+#include "power.h"
 
 LOG_MODULE_REGISTER(som_protocol, LOG_LEVEL_INF);
 
@@ -177,6 +179,130 @@ void som_set_notify_callback(som_notify_cb_t cb)
 	notify_cb = cb;
 }
 
+/* PVT info convenience function */
+int som_get_pvt_info(struct som_pvt_info *info)
+{
+	if (!info) {
+		return -EINVAL;
+	}
+
+	memset(info, 0, sizeof(*info));
+	info->fan_speed = -1;
+
+	return som_cmd(SOM_CMD_PVT_INFO, info, sizeof(*info),
+		       CONFIG_SOM_PROTOCOL_TX_TIMEOUT_MS);
+}
+
+/* Shell commands */
+static int cmd_som_status(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	shell_print(sh, "SOM daemon: %s", som_is_alive() ? "ONLINE" : "OFFLINE");
+	shell_print(sh, "Host power: %s", power_get_state() ? "ON" : "OFF");
+
+	return 0;
+}
+
+static int cmd_som_pvt(const struct shell *sh, size_t argc, char **argv)
+{
+	struct som_pvt_info info;
+	int ret;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	ret = som_get_pvt_info(&info);
+	if (ret < 0) {
+		shell_error(sh, "Failed to get PVT info from SOM: %d", ret);
+		return ret;
+	}
+
+	shell_print(sh, "CPU temp: %d C", info.cpu_temp);
+	shell_print(sh, "NPU temp: %d C", info.npu_temp);
+	if (info.fan_speed >= 0) {
+		shell_print(sh, "Fan speed: %d RPM", info.fan_speed);
+	} else {
+		shell_print(sh, "Fan speed: N/A");
+	}
+
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_som_cmds,
+	SHELL_CMD(status, NULL, "Show SOM communication status", cmd_som_status),
+	SHELL_CMD(temp, NULL, "Show SOM temperature and fan speed", cmd_som_pvt),
+	SHELL_SUBCMD_SET_END
+);
+
+SHELL_CMD_REGISTER(som, &sub_som_cmds, "SOM commands", NULL);
+
+/* Keepalive thread */
+#ifdef CONFIG_SOM_KEEPALIVE
+
+K_THREAD_STACK_DEFINE(som_keepalive_stack, CONFIG_SOM_KEEPALIVE_STACK_SIZE);
+static struct k_thread som_keepalive_thread_data;
+
+static void som_keepalive_thread(void *a, void *b, void *c)
+{
+	int fail_count = 0;
+	bool was_alive = false;
+
+	LOG_INF("SOM keepalive thread started");
+
+	while (1) {
+		k_msleep(CONFIG_SOM_KEEPALIVE_INTERVAL_MS);
+
+		if (!power_get_state()) {
+			if (som_alive) {
+				som_set_alive(false);
+				LOG_INF("SOM marked offline (host power off)");
+			}
+			fail_count = 0;
+			continue;
+		}
+
+		int ret = som_cmd(SOM_CMD_BOARD_STATUS, NULL, 0,
+				  CONFIG_SOM_KEEPALIVE_INTERVAL_MS);
+
+		if (ret != 0) {
+			fail_count++;
+			if (fail_count >= CONFIG_SOM_KEEPALIVE_FAIL_THRESHOLD &&
+			    som_alive) {
+				som_set_alive(false);
+				LOG_WRN("SOM keepalive lost after %d failures",
+					fail_count);
+			}
+		} else {
+			if (!som_alive) {
+				LOG_INF("SOM keepalive established");
+			}
+			som_set_alive(true);
+			fail_count = 0;
+		}
+
+		if (was_alive != som_alive) {
+			LOG_INF("SOM daemon state: %s",
+				som_alive ? "ONLINE" : "OFFLINE");
+			was_alive = som_alive;
+		}
+	}
+}
+
+static int som_keepalive_init(void)
+{
+	k_thread_create(&som_keepalive_thread_data, som_keepalive_stack,
+			K_THREAD_STACK_SIZEOF(som_keepalive_stack),
+			som_keepalive_thread,
+			NULL, NULL, NULL,
+			CONFIG_SOM_PROTOCOL_PRIORITY + 1, 0, K_NO_WAIT);
+	k_thread_name_set(&som_keepalive_thread_data, "som_keepalive");
+
+	return 0;
+}
+#endif /* CONFIG_SOM_KEEPALIVE */
+
 int som_protocol_init(void)
 {
 	if (!device_is_ready(uart_dev)) {
@@ -194,6 +320,10 @@ int som_protocol_init(void)
 			NULL, NULL, NULL,
 			CONFIG_SOM_PROTOCOL_PRIORITY, 0, K_NO_WAIT);
 	k_thread_name_set(&som_rx_thread_data, "som_protocol");
+
+#ifdef CONFIG_SOM_KEEPALIVE
+	som_keepalive_init();
+#endif
 
 	LOG_INF("SOM protocol initialized (UART4)");
 

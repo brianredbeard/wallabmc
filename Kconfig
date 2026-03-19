@@ -479,6 +479,39 @@ config SOM_PROTOCOL_TX_TIMEOUT_MS
 	int "SOM command response timeout (ms)"
 	default 2000
 
+config SOM_KEEPALIVE
+	bool "SOM keepalive health monitor"
+	default y
+	depends on SOM_PROTOCOL
+
+config SOM_KEEPALIVE_INTERVAL_MS
+	int "Keepalive poll interval (ms)"
+	default 1000
+	depends on SOM_KEEPALIVE
+
+config SOM_KEEPALIVE_FAIL_THRESHOLD
+	int "Consecutive failures before marking SOM offline"
+	default 5
+	depends on SOM_KEEPALIVE
+
+config SOM_KEEPALIVE_STACK_SIZE
+	int "Keepalive thread stack size"
+	default 1024
+	depends on SOM_KEEPALIVE
+
+config GRACEFUL_SHUTDOWN_TIMEOUT_MS
+	int "Graceful shutdown timeout (ms)"
+	default 6000
+	depends on SOM_PROTOCOL
+	help
+	  Time to wait for SOM to acknowledge shutdown before forcing
+	  power off.
+
+config GRACEFUL_REBOOT_TIMEOUT_MS
+	int "Graceful reboot timeout (ms)"
+	default 5000
+	depends on SOM_PROTOCOL
+
 endif # SOM_PROTOCOL
 
 source "Kconfig.zephyr"
