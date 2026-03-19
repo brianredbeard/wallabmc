@@ -39,6 +39,7 @@
 
 	host-console-uart = &usart6;
 	host-console-uart-muxsel = &uartmuxsel;
+	reset-button = &user_button_recovery;
 
         bootsel-0 = &bootsel0;
         bootsel-1 = &bootsel1;
