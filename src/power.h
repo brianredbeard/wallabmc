@@ -12,5 +12,7 @@ int status_led_init(void);
 int power_set_state(bool on);
 bool power_get_state(void);
 int power_reset(void);
+int power_graceful_off(void);
+int power_graceful_restart(void);
 
 #endif

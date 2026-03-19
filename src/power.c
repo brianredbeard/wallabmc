@@ -15,6 +15,13 @@
 LOG_MODULE_REGISTER(wallabmc_power);
 
 #include "config.h"
+#include "som_protocol.h"
+
+/* Forward declarations */
+int power_reset(void);
+#ifdef CONFIG_SOM_PROTOCOL
+static void power_graceful_init(void);
+#endif
 
 #define GPIO_POWER_1 DT_ALIAS(power_gpio_1)
 #define GPIO_POWER_2 DT_ALIAS(power_gpio_2)
@@ -105,9 +112,13 @@ int power_init(void)
 	}
 
 	if (config_host_auto_poweron()) {
-		// Power on at BMC boot
-		return power_on();
+		/* Power on at BMC boot */
+		power_on();
 	}
+
+#ifdef CONFIG_SOM_PROTOCOL
+	power_graceful_init();
+#endif
 
 	return 0;
 }
@@ -126,9 +137,110 @@ static int cmd_power_off(const struct shell *sh, size_t argc, char **argv)
 	return power_off();
 }
 
+#ifdef CONFIG_SOM_PROTOCOL
+static struct k_timer shutdown_timer;
+static struct k_timer reboot_timer;
+
+static void shutdown_timer_expiry(struct k_timer *timer)
+{
+	LOG_WRN("SOM shutdown timeout, forcing power off");
+	power_off();
+}
+
+static void reboot_timer_expiry(struct k_timer *timer)
+{
+	LOG_WRN("SOM reboot timeout, forcing reset");
+	power_reset();
+}
+
+static void som_power_notify(uint8_t cmd_type)
+{
+	if (cmd_type == SOM_CMD_POWER_OFF) {
+		k_timer_stop(&shutdown_timer);
+		LOG_INF("SOM acknowledged shutdown, powering off");
+		power_off();
+	} else if (cmd_type == SOM_CMD_RESTART) {
+		k_timer_stop(&reboot_timer);
+		LOG_INF("SOM acknowledged restart, resetting");
+		power_reset();
+	}
+}
+
+int power_graceful_off(void)
+{
+	int ret;
+
+	if (!power_get_state()) {
+		return 0;
+	}
+
+	ret = som_cmd(SOM_CMD_POWER_OFF, NULL, 0,
+		      CONFIG_SOM_PROTOCOL_TX_TIMEOUT_MS);
+	if (ret < 0) {
+		LOG_WRN("Could not send shutdown to SOM, forcing off");
+		return power_off();
+	}
+
+	k_timer_start(&shutdown_timer,
+		       K_MSEC(CONFIG_GRACEFUL_SHUTDOWN_TIMEOUT_MS), K_NO_WAIT);
+
+	LOG_INF("Graceful shutdown initiated, timeout %d ms",
+		CONFIG_GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+	return 0;
+}
+
+int power_graceful_restart(void)
+{
+	int ret;
+
+	if (!power_get_state()) {
+		return power_on();
+	}
+
+	ret = som_cmd(SOM_CMD_RESTART, NULL, 0,
+		      CONFIG_SOM_PROTOCOL_TX_TIMEOUT_MS);
+	if (ret < 0) {
+		LOG_WRN("Could not send restart to SOM, forcing reset");
+		return power_reset();
+	}
+
+	k_timer_start(&reboot_timer,
+		       K_MSEC(CONFIG_GRACEFUL_REBOOT_TIMEOUT_MS), K_NO_WAIT);
+
+	LOG_INF("Graceful restart initiated, timeout %d ms",
+		CONFIG_GRACEFUL_REBOOT_TIMEOUT_MS);
+	return 0;
+}
+
+static void power_graceful_init(void)
+{
+	k_timer_init(&shutdown_timer, shutdown_timer_expiry, NULL);
+	k_timer_init(&reboot_timer, reboot_timer_expiry, NULL);
+	som_set_notify_callback(som_power_notify);
+}
+
+static int cmd_power_shutdown(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+	return power_graceful_off();
+}
+
+static int cmd_power_restart(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+	return power_graceful_restart();
+}
+#endif /* CONFIG_SOM_PROTOCOL */
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_power_cmds,
 	SHELL_CMD(on,    NULL, "Power on.", cmd_power_on),
-	SHELL_CMD(off,   NULL, "Power off.", cmd_power_off),
+	SHELL_CMD(off,   NULL, "Force power off.", cmd_power_off),
+#ifdef CONFIG_SOM_PROTOCOL
+	SHELL_CMD(shutdown, NULL, "Graceful shutdown (ask SOM first).", cmd_power_shutdown),
+	SHELL_CMD(restart, NULL, "Graceful restart (ask SOM first).", cmd_power_restart),
+#endif
 	SHELL_SUBCMD_SET_END
 );
 
