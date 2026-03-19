@@ -419,4 +419,13 @@ config CONSOLE_BRIDGE_PRIORITY
 
 endif
 
+config BOOTSEL
+	bool "SOM boot mode selection"
+	default y
+	depends on $(dt_alias_enabled,bootsel-0)
+	help
+	  Control the SOM boot source via BOOT_SEL[3:0] GPIO pins.
+	  Supports hardware mode (follow DIP switch) and software mode
+	  (MCU drives the pins).
+
 source "Kconfig.zephyr"

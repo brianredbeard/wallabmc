@@ -63,6 +63,22 @@
 			gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
 			label = "UARTMUXSEL";
 		};
+		bootsel0: bootsel0 {
+			gpios = <&gpiod 0 GPIO_ACTIVE_HIGH>;
+			label = "BOOT_SEL0";
+		};
+		bootsel1: bootsel1 {
+			gpios = <&gpiod 1 GPIO_ACTIVE_HIGH>;
+			label = "BOOT_SEL1";
+		};
+		bootsel2: bootsel2 {
+			gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
+			label = "BOOT_SEL2";
+		};
+		bootsel3: bootsel3 {
+			gpios = <&gpiod 3 GPIO_ACTIVE_HIGH>;
+			label = "BOOT_SEL3";
+		};
 	};
 
 

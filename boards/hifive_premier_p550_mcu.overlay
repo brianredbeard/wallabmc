@@ -39,6 +39,11 @@
 
 	host-console-uart = &usart6;
 	host-console-uart-muxsel = &uartmuxsel;
+
+        bootsel-0 = &bootsel0;
+        bootsel-1 = &bootsel1;
+        bootsel-2 = &bootsel2;
+        bootsel-3 = &bootsel3;
     };
 
 };

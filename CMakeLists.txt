@@ -96,6 +96,10 @@ target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 	src/fs.c
 )
 
+target_sources_ifdef(CONFIG_BOOTSEL app PRIVATE
+	src/bootsel.c
+)
+
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )

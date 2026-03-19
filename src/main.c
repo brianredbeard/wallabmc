@@ -22,6 +22,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "sensors.h"
 #include "jtag.h"
 #include "console_logger.h"
+#include "bootsel.h"
 #include "console_bridge.h"
 #include "console_bridge_ws.h"
 #include "vpd.h"
@@ -246,6 +247,12 @@ int main(void)
 	if (status_led_init() < 0) {
 		LOG_ERR("LED init failed");
 		return -1;
+	}
+
+	LOG_DBG("Boot select init");
+	if (bootsel_init() < 0) {
+		LOG_ERR("Boot select init failed");
+		/* Continue */
 	}
 
 	LOG_DBG("JTAG init");
