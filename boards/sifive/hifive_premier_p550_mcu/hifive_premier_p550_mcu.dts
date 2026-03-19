@@ -80,6 +80,14 @@
 			gpios = <&gpiod 3 GPIO_ACTIVE_HIGH>;
 			label = "BOOT_SEL3";
 		};
+		i2c_mux_en: i2c_mux_en {
+			gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
+			label = "I2C_MUX_EN";
+		};
+		eeprom_wp: eeprom_wp {
+			gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
+			label = "EEPROM_WP";
+		};
 	};
 
 
@@ -194,6 +202,22 @@
 	};
 };
 
+&i2c1 {
+	pinctrl-0 = <&i2c1_scl_pb6 &i2c1_sda_pb7>;
+	pinctrl-names = "default";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	eeprom: eeprom@50 {
+		compatible = "atmel,at24";
+		reg = <0x50>;
+		size = <256>;
+		pagesize = <8>;
+		address-width = <8>;
+		timeout = <5>;
+	};
+};
+
 &timers4 {
 	status = "okay";
 	pwm4: pwm {
@@ -201,3 +225,4 @@
 		pinctrl-0 = <&tim4_ch1_pd12 &tim4_ch2_pd13>;
 		pinctrl-names = "default";
 	};
+};

@@ -22,6 +22,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "sensors.h"
 #include "jtag.h"
 #include "console_logger.h"
+#include "board_identity.h"
 #include "bootsel.h"
 #include "console_bridge.h"
 #include "console_bridge_ws.h"
@@ -223,6 +224,12 @@ int main(void)
 	LOG_DBG("Button init");
 	if (button_init() < 0) {
 		LOG_ERR("Button init failed");
+		/* Continue */
+	}
+
+	LOG_DBG("Board identity init");
+	if (board_identity_init() < 0) {
+		LOG_ERR("Board identity init failed, MAC from EEPROM unavailable");
 		/* Continue */
 	}
 

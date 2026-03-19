@@ -45,6 +45,9 @@
         bootsel-1 = &bootsel1;
         bootsel-2 = &bootsel2;
         bootsel-3 = &bootsel3;
+
+		i2c-mux-en = &i2c_mux_en;
+		eeprom-wp = &eeprom_wp;
     };
 
 };

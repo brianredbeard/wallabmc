@@ -449,4 +449,12 @@ config FAN_PWM_PERIOD_US
 
 endif # FAN_CONTROL
 
+config BOARD_IDENTITY
+	bool "Board identity from EEPROM"
+	default y
+	depends on EEPROM
+	help
+	  Read carrier board identity (serial number, MAC addresses,
+	  PCB revision) from AT24C02C EEPROM on I2C1.
+
 source "Kconfig.zephyr"
