@@ -108,6 +108,10 @@ target_sources_ifdef(CONFIG_BOARD_IDENTITY app PRIVATE
 	src/board_identity.c
 )
 
+target_sources_ifdef(CONFIG_SOM_PROTOCOL app PRIVATE
+	src/som_protocol.c
+)
+
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )

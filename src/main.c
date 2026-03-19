@@ -29,6 +29,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "vpd.h"
 #include "git_sha.h"
 #include "fan.h"
+#include "som_protocol.h"
 
 static bool boot_finished = false;
 
@@ -297,6 +298,12 @@ int main(void)
 	if (console_bridge_ws_init() < 0) {
 		LOG_ERR("Console bridge WS init failed");
 		return -1;
+	}
+
+	LOG_DBG("SOM protocol init");
+	if (som_protocol_init() < 0) {
+		LOG_ERR("SOM protocol init failed");
+		/* Continue */
 	}
 
 	boot_finished = true;

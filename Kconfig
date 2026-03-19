@@ -457,4 +457,28 @@ config BOARD_IDENTITY
 	  Read carrier board identity (serial number, MAC addresses,
 	  PCB revision) from AT24C02C EEPROM on I2C1.
 
+config SOM_PROTOCOL
+	bool "SOM-MCU UART4 communication protocol"
+	default y
+	depends on $(dt_nodelabel_enabled,uart4)
+	select SERIAL
+	select UART_ASYNC_API
+	select SERIAL_SUPPORT_ASYNC
+
+if SOM_PROTOCOL
+
+config SOM_PROTOCOL_STACK_SIZE
+	int "SOM protocol thread stack size"
+	default 2048
+
+config SOM_PROTOCOL_PRIORITY
+	int "SOM protocol thread priority"
+	default 5
+
+config SOM_PROTOCOL_TX_TIMEOUT_MS
+	int "SOM command response timeout (ms)"
+	default 2000
+
+endif # SOM_PROTOCOL
+
 source "Kconfig.zephyr"
