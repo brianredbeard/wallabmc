@@ -108,6 +108,10 @@ target_sources_ifdef(CONFIG_BOARD_IDENTITY app PRIVATE
 	src/board_identity.c
 )
 
+target_sources_ifdef(CONFIG_POWER_MONITOR app PRIVATE
+	src/power_monitor.c
+)
+
 target_sources_ifdef(CONFIG_SOM_PROTOCOL app PRIVATE
 	src/som_protocol.c
 )

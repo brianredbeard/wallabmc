@@ -475,6 +475,12 @@ config BOARD_IDENTITY
 	  Read carrier board identity (serial number, MAC addresses,
 	  PCB revision) from AT24C02C EEPROM on I2C1.
 
+config POWER_MONITOR
+	bool "12V rail power monitoring (INA226)"
+	default y
+	depends on SENSOR
+	depends on $(dt_nodelabel_enabled,ina226)
+
 config SOM_PROTOCOL
 	bool "SOM-MCU UART4 communication protocol"
 	default y

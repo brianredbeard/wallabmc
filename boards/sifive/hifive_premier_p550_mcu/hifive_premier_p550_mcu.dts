@@ -246,3 +246,17 @@
 		pinctrl-names = "default";
 	};
 };
+
+&i2c3 {
+	pinctrl-0 = <&i2c3_scl_pa8 &i2c3_sda_pc9>;
+	pinctrl-names = "default";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	ina226: ina226@44 {
+		compatible = "ti,ina226";
+		reg = <0x44>;
+		rshunt-micro-ohms = <1000>;
+		current-lsb-microamps = <1000>;
+	};
+};
