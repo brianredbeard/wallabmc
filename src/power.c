@@ -27,6 +27,8 @@ static void power_graceful_init(void);
 #define GPIO_POWER_2 DT_ALIAS(power_gpio_2)
 #define GPIO_RESET DT_ALIAS(reset_gpio_1)
 #define STATUS_LED DT_ALIAS(status_led)
+#define GPIO_POWER_GOOD DT_ALIAS(power_good)
+#define GPIO_POWER_LED  DT_ALIAS(power_led)
 
 static const struct gpio_dt_spec power_gpios[] = {
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_1)
@@ -36,6 +38,16 @@ static const struct gpio_dt_spec power_gpios[] = {
 	GPIO_DT_SPEC_GET(GPIO_POWER_2, gpios),
 #endif
 };
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_GOOD)
+static const struct gpio_dt_spec power_good_gpio =
+	GPIO_DT_SPEC_GET(GPIO_POWER_GOOD, gpios);
+#endif
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
+static const struct gpio_dt_spec power_led_gpio =
+	GPIO_DT_SPEC_GET(GPIO_POWER_LED, gpios);
+#endif
 
 static bool system_power_state = false;
 
@@ -51,10 +63,37 @@ static int power_on(void)
 	for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
 		ret = gpio_pin_set_dt(&power_gpios[i], 1);
 		if (ret < 0) {
-			LOG_INF("Could not toggle power GPIO %d\n", i);
+			LOG_ERR("Could not assert power GPIO %d", i);
 			return -1;
 		}
 	}
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_GOOD)
+	/* Wait for power good */
+	int retries = CONFIG_POWER_GOOD_TIMEOUT_MS / CONFIG_POWER_GOOD_POLL_MS;
+
+	while (retries > 0) {
+		k_msleep(CONFIG_POWER_GOOD_POLL_MS);
+		if (gpio_pin_get_dt(&power_good_gpio) == 1) {
+			break;
+		}
+		retries--;
+	}
+
+	if (retries <= 0) {
+		LOG_ERR("Power-good timeout, aborting power on");
+		for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
+			gpio_pin_set_dt(&power_gpios[i], 0);
+		}
+		return -ETIMEDOUT;
+	}
+
+	LOG_INF("Power good detected");
+#endif
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
+	gpio_pin_set_dt(&power_led_gpio, 1);
+#endif
 
 	system_power_state = true;
 
@@ -65,10 +104,14 @@ static int power_off(void)
 {
 	int i, ret;
 
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
+	gpio_pin_set_dt(&power_led_gpio, 0);
+#endif
+
 	for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
 		ret = gpio_pin_set_dt(&power_gpios[i], 0);
 		if (ret < 0) {
-			LOG_INF("Could not toggle power GPIO %d\n", i);
+			LOG_ERR("Could not deassert power GPIO %d", i);
 			return -1;
 		}
 	}
@@ -110,6 +153,23 @@ int power_init(void)
 			return -1;
 		}
 	}
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_GOOD)
+	if (!gpio_is_ready_dt(&power_good_gpio)) {
+		LOG_ERR("Power-good GPIO not ready");
+		return -1;
+	}
+	if (gpio_pin_configure_dt(&power_good_gpio, GPIO_INPUT) < 0) {
+		LOG_ERR("Could not configure power-good GPIO");
+		return -1;
+	}
+#endif
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
+	if (gpio_is_ready_dt(&power_led_gpio)) {
+		gpio_pin_configure_dt(&power_led_gpio, GPIO_OUTPUT_INACTIVE);
+	}
+#endif
 
 	if (config_host_auto_poweron()) {
 		/* Power on at BMC boot */

@@ -419,6 +419,24 @@ config CONSOLE_BRIDGE_PRIORITY
 
 endif
 
+config POWER_SEQUENCING
+	bool "Hardware power sequencing state machine"
+	default y
+	depends on $(dt_alias_enabled,power-good)
+	help
+	  Enable multi-step power sequencing (ATX -> DC -> wait power good ->
+	  power LED) instead of simple GPIO toggle.
+
+config POWER_GOOD_TIMEOUT_MS
+	int "Power-good wait timeout (ms)"
+	default 2000
+	depends on POWER_SEQUENCING
+
+config POWER_GOOD_POLL_MS
+	int "Power-good poll interval (ms)"
+	default 200
+	depends on POWER_SEQUENCING
+
 config BOOTSEL
 	bool "SOM boot mode selection"
 	default y
