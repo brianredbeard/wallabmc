@@ -486,8 +486,7 @@ config SOM_PROTOCOL
 	default y
 	depends on $(dt_nodelabel_enabled,uart4)
 	select SERIAL
-	select UART_ASYNC_API
-	select SERIAL_SUPPORT_ASYNC
+	select UART_INTERRUPT_DRIVEN
 
 if SOM_PROTOCOL
 

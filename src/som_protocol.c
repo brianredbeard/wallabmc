@@ -6,6 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/sys/ring_buffer.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
@@ -28,6 +29,11 @@ static bool som_alive;
 
 static __nocache uint8_t rx_buf[sizeof(struct som_message)];
 static size_t rx_pos;
+
+#define RX_RING_SIZE 512
+static uint8_t rx_ring_buf_data[RX_RING_SIZE];
+static struct ring_buf rx_ring;
+static struct k_sem rx_sem;
 
 K_THREAD_STACK_DEFINE(som_rx_stack, CONFIG_SOM_PROTOCOL_STACK_SIZE);
 static struct k_thread som_rx_thread_data;
@@ -74,6 +80,28 @@ static void handle_rx_message(const struct som_message *msg)
 	}
 }
 
+static void uart_isr_callback(const struct device *dev, void *user_data)
+{
+	uint8_t buf[16];
+	int len;
+
+	while (uart_irq_update(dev) && uart_irq_rx_ready(dev)) {
+		len = uart_fifo_read(dev, buf, sizeof(buf));
+		if (len > 0) {
+			ring_buf_put(&rx_ring, buf, len);
+			k_sem_give(&rx_sem);
+		}
+	}
+}
+
+static int rx_get_byte(uint8_t *byte)
+{
+	while (ring_buf_get(&rx_ring, byte, 1) == 0) {
+		k_sem_take(&rx_sem, K_FOREVER);
+	}
+	return 0;
+}
+
 static void som_rx_thread(void *a, void *b, void *c)
 {
 	uint8_t byte;
@@ -84,20 +112,11 @@ static void som_rx_thread(void *a, void *b, void *c)
 		(SOM_FRAME_HEADER >> 24) & 0xFF,
 	};
 	int hdr_match = 0;
-	bool rx_first = true;
 
-	LOG_INF("SOM protocol RX thread started");
+	LOG_INF("SOM protocol RX thread started (IRQ mode)");
 
 	while (1) {
-		if (uart_poll_in(uart_dev, &byte) < 0) {
-			k_msleep(1);
-			continue;
-		}
-
-		if (rx_first) {
-			LOG_INF("UART4 RX first byte: 0x%02x", byte);
-			rx_first = false;
-		}
+		rx_get_byte(&byte);
 
 		if (rx_pos == 0) {
 			if (byte == hdr_bytes[hdr_match]) {
@@ -318,7 +337,12 @@ int som_protocol_init(void)
 
 	k_sem_init(&cmd_sem, 1, 1);
 	k_sem_init(&cmd_done, 0, 1);
+	k_sem_init(&rx_sem, 0, 1);
+	ring_buf_init(&rx_ring, sizeof(rx_ring_buf_data), rx_ring_buf_data);
 	rx_pos = 0;
+
+	uart_irq_callback_set(uart_dev, uart_isr_callback);
+	uart_irq_rx_enable(uart_dev);
 
 	k_thread_create(&som_rx_thread_data, som_rx_stack,
 			K_THREAD_STACK_SIZEOF(som_rx_stack),
