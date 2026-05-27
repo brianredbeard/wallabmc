@@ -18,13 +18,13 @@ LOG_MODULE_REGISTER(board_identity, LOG_LEVEL_INF);
 
 static const struct device *eeprom_dev = DEVICE_DT_GET(DT_NODELABEL(eeprom));
 
-#define I2C_MUX_EN_NODE DT_ALIAS(i2c_mux_en)
+#define I2C_MUX_EN_NODE DT_NODELABEL(i2c_mux_en)
 #if DT_NODE_EXISTS(I2C_MUX_EN_NODE)
 static const struct gpio_dt_spec i2c_mux_gpio =
 	GPIO_DT_SPEC_GET(I2C_MUX_EN_NODE, gpios);
 #endif
 
-#define EEPROM_WP_NODE DT_ALIAS(eeprom_wp)
+#define EEPROM_WP_NODE DT_NODELABEL(eeprom_wp)
 #if DT_NODE_EXISTS(EEPROM_WP_NODE)
 static const struct gpio_dt_spec eeprom_wp_gpio =
 	GPIO_DT_SPEC_GET(EEPROM_WP_NODE, gpios);

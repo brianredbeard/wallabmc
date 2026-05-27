@@ -23,7 +23,10 @@ int power_monitor_read(int32_t *voltage_mv, int32_t *current_ma,
 	int ret;
 
 	if (!device_is_ready(ina226_dev)) {
-		return -ENODEV;
+		ret = device_init(ina226_dev);
+		if (ret < 0) {
+			return ret;
+		}
 	}
 
 	ret = sensor_sample_fetch(ina226_dev);

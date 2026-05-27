@@ -258,5 +258,6 @@
 		reg = <0x44>;
 		rshunt-micro-ohms = <1000>;
 		current-lsb-microamps = <1000>;
+		zephyr,deferred-init;
 	};
 };
