@@ -100,6 +100,10 @@ target_sources_ifdef(CONFIG_BOOTSEL app PRIVATE
 	src/bootsel.c
 )
 
+target_sources_ifdef(CONFIG_FAN_CONTROL app PRIVATE
+	src/fan.c
+)
+
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )

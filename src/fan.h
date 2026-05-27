@@ -1,0 +1,16 @@
+/*
+ * SPDX-FileCopyrightText: © 2025-2026 Tenstorrent AI ULC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#ifndef __FAN_H__
+#define __FAN_H__
+
+#ifdef CONFIG_FAN_CONTROL
+int fan_init(void);
+int fan_set_duty(int fan_num, int duty_pct);
+int fan_get_duty(int fan_num);
+#else
+static inline int fan_init(void) { return 0; }
+#endif
+
+#endif

@@ -7,6 +7,7 @@
 #include <st/f4/stm32f407Xe.dtsi>
 #include <st/f4/stm32f407v(e-g)tx-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
 
 / {
 	model = "SiFive HiFive Premier P550 MCU";
@@ -81,6 +82,20 @@
 		};
 	};
 
+
+	fans {
+		compatible = "pwm-leds";
+
+		fan0: fan_0 {
+			pwms = <&pwm4 1 40000 PWM_POLARITY_NORMAL>;
+			label = "Fan 0";
+		};
+
+		fan1: fan_1 {
+			pwms = <&pwm4 2 40000 PWM_POLARITY_NORMAL>;
+			label = "Fan 1";
+		};
+	};
 
 	aliases {
 		led0 = &red_led;
@@ -178,3 +193,11 @@
 		reg = <0x00>;
 	};
 };
+
+&timers4 {
+	status = "okay";
+	pwm4: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim4_ch1_pd12 &tim4_ch2_pd13>;
+		pinctrl-names = "default";
+	};
