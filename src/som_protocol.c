@@ -84,6 +84,7 @@ static void som_rx_thread(void *a, void *b, void *c)
 		(SOM_FRAME_HEADER >> 24) & 0xFF,
 	};
 	int hdr_match = 0;
+	bool rx_first = true;
 
 	LOG_INF("SOM protocol RX thread started");
 
@@ -91,6 +92,11 @@ static void som_rx_thread(void *a, void *b, void *c)
 		if (uart_poll_in(uart_dev, &byte) < 0) {
 			k_msleep(1);
 			continue;
+		}
+
+		if (rx_first) {
+			LOG_INF("UART4 RX first byte: 0x%02x", byte);
+			rx_first = false;
 		}
 
 		if (rx_pos == 0) {
@@ -145,7 +151,7 @@ int som_cmd(uint8_t cmd, void *data, size_t data_len, uint32_t timeout)
 
 	ret = k_sem_take(&cmd_done, K_MSEC(timeout));
 	if (ret == -EAGAIN) {
-		LOG_WRN("SOM command 0x%02x timed out", cmd);
+		LOG_DBG("SOM command 0x%02x timed out", cmd);
 		k_sem_give(&cmd_sem);
 		return -ETIMEDOUT;
 	}
