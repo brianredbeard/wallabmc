@@ -1,0 +1,4 @@
+build/
+build-*/
+build-*.hex
+*.signed.hex
