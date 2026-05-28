@@ -419,126 +419,14 @@ config CONSOLE_BRIDGE_PRIORITY
 
 endif
 
-config POWER_SEQUENCING
-	bool "Hardware power sequencing state machine"
-	default y
-	depends on $(dt_alias_enabled,power-good)
-	help
-	  Enable multi-step power sequencing (ATX -> DC -> wait power good ->
-	  power LED) instead of simple GPIO toggle.
+menu "Hardware management"
 
-config POWER_GOOD_TIMEOUT_MS
-	int "Power-good wait timeout (ms)"
-	default 2000
-	depends on POWER_SEQUENCING
+rsource "src/Kconfig.power"
+rsource "src/Kconfig.bootsel"
+rsource "src/Kconfig.fan"
+rsource "src/Kconfig.board_identity"
+rsource "src/Kconfig.som_protocol"
 
-config POWER_GOOD_POLL_MS
-	int "Power-good poll interval (ms)"
-	default 200
-	depends on POWER_SEQUENCING
-
-config BOOTSEL
-	bool "SOM boot mode selection"
-	default y
-	depends on $(dt_alias_enabled,bootsel-0)
-	help
-	  Control the SOM boot source via BOOT_SEL[3:0] GPIO pins.
-	  Supports hardware mode (follow DIP switch) and software mode
-	  (MCU drives the pins).
-
-config FAN_CONTROL
-	bool "Fan PWM speed control"
-	default y
-	depends on PWM
-	depends on $(dt_nodelabel_enabled,pwm4)
-
-if FAN_CONTROL
-
-config FAN_DEFAULT_DUTY_PCT
-	int "Default fan duty cycle (%)"
-	range 0 100
-	default 50
-
-config FAN_PWM_PERIOD_US
-	int "PWM period (microseconds)"
-	default 40
-	help
-	  PWM period. 40us = 25kHz, standard for 4-pin PC fans.
-
-endif # FAN_CONTROL
-
-config BOARD_IDENTITY
-	bool "Board identity from EEPROM"
-	default y
-	depends on EEPROM
-	help
-	  Read carrier board identity (serial number, MAC addresses,
-	  PCB revision) from AT24C02C EEPROM on I2C1.
-
-config POWER_MONITOR
-	bool "12V rail power monitoring (INA226)"
-	default y
-	depends on SENSOR
-	depends on $(dt_nodelabel_enabled,ina226)
-
-config SOM_PROTOCOL
-	bool "SOM-MCU UART4 communication protocol"
-	default y
-	depends on $(dt_nodelabel_enabled,uart4)
-	select SERIAL
-	select UART_INTERRUPT_DRIVEN
-
-if SOM_PROTOCOL
-
-config SOM_PROTOCOL_STACK_SIZE
-	int "SOM protocol thread stack size"
-	default 2048
-
-config SOM_PROTOCOL_PRIORITY
-	int "SOM protocol thread priority"
-	default 5
-
-config SOM_PROTOCOL_TX_TIMEOUT_MS
-	int "SOM command response timeout (ms)"
-	default 2000
-
-config SOM_KEEPALIVE
-	bool "SOM keepalive health monitor"
-	default y
-	depends on SOM_PROTOCOL
-
-config SOM_KEEPALIVE_INTERVAL_MS
-	int "Keepalive poll interval (ms)"
-	default 1000
-	depends on SOM_KEEPALIVE
-
-config SOM_KEEPALIVE_FAIL_THRESHOLD
-	int "Consecutive failures before marking SOM offline"
-	default 5
-	depends on SOM_KEEPALIVE
-
-config SOM_KEEPALIVE_STACK_SIZE
-	int "Keepalive thread stack size"
-	default 1024
-	depends on SOM_KEEPALIVE
-
-config GRACEFUL_SHUTDOWN_TIMEOUT_MS
-	int "Graceful shutdown timeout (ms)"
-	default 60000
-	depends on SOM_PROTOCOL
-	help
-	  Time to wait for SOM to send shutdown NOTIFY before forcing
-	  power off. Linux shutdown can take 30+ seconds for service
-	  stops and filesystem sync.
-
-config GRACEFUL_REBOOT_TIMEOUT_MS
-	int "Graceful reboot timeout (ms)"
-	default 60000
-	depends on SOM_PROTOCOL
-	help
-	  Time to wait for SOM to send reboot NOTIFY before forcing
-	  reset. Linux reboot can take 30+ seconds.
-
-endif # SOM_PROTOCOL
+endmenu
 
 source "Kconfig.zephyr"
