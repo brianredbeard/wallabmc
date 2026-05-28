@@ -22,14 +22,14 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "sensors.h"
 #include "jtag.h"
 #include "console_logger.h"
-#include "board_identity.h"
-#include "bootsel.h"
+#include "eswin/board_identity.h"
+#include "eswin/bootsel.h"
 #include "console_bridge.h"
 #include "console_bridge_ws.h"
 #include "vpd.h"
 #include "git_sha.h"
 #include "fan.h"
-#include "som_protocol.h"
+#include "eswin/som_protocol.h"
 
 static bool boot_finished = false;
 

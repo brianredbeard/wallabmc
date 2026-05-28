@@ -18,6 +18,8 @@ else()
 endif()
 
 
+target_include_directories(app PRIVATE src)
+
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
   NAME http_resource_desc_web_https_service
@@ -96,24 +98,25 @@ target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 	src/fs.c
 )
 
-target_sources_ifdef(CONFIG_BOOTSEL app PRIVATE
-	src/bootsel.c
-)
-
 target_sources_ifdef(CONFIG_FAN_CONTROL app PRIVATE
 	src/fan.c
-)
-
-target_sources_ifdef(CONFIG_BOARD_IDENTITY app PRIVATE
-	src/board_identity.c
 )
 
 target_sources_ifdef(CONFIG_POWER_MONITOR app PRIVATE
 	src/power_monitor.c
 )
 
+# ESWIN EIC7700X / HiFive Premier P550 vendor-specific modules
+target_sources_ifdef(CONFIG_BOOTSEL app PRIVATE
+	src/eswin/bootsel.c
+)
+
+target_sources_ifdef(CONFIG_BOARD_IDENTITY app PRIVATE
+	src/eswin/board_identity.c
+)
+
 target_sources_ifdef(CONFIG_SOM_PROTOCOL app PRIVATE
-	src/som_protocol.c
+	src/eswin/som_protocol.c
 )
 
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE

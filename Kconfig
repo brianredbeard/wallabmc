@@ -422,10 +422,15 @@ endif
 menu "Hardware management"
 
 rsource "src/Kconfig.power"
-rsource "src/Kconfig.bootsel"
 rsource "src/Kconfig.fan"
-rsource "src/Kconfig.board_identity"
-rsource "src/Kconfig.som_protocol"
+
+menu "ESWIN EIC7700X / HiFive Premier P550"
+
+rsource "src/eswin/Kconfig.bootsel"
+rsource "src/eswin/Kconfig.board_identity"
+rsource "src/eswin/Kconfig.som_protocol"
+
+endmenu
 
 endmenu
 

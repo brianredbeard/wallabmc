@@ -15,7 +15,7 @@
 LOG_MODULE_REGISTER(wallabmc_power);
 
 #include "config.h"
-#include "som_protocol.h"
+#include "eswin/som_protocol.h"
 
 /* Forward declarations */
 int power_reset(void);

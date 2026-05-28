@@ -30,7 +30,7 @@
 #include "sensors.h"
 #include "vpd.h"
 #include "git_sha.h"
-#include "board_identity.h"
+#include "eswin/board_identity.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 

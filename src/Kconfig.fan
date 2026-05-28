@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: © 2026 Red Hat, LLC
 # Fan PWM control and tachometer RPM sensing
 
 config FAN_CONTROL

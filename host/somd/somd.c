@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: © 2026 Red Hat, LLC
 // SPDX-License-Identifier: Apache-2.0
 /*
  * somd - SOM daemon for HiFive Premier P550
