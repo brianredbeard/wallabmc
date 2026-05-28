@@ -117,12 +117,12 @@ config NET_PKT_TX_COUNT
 config NET_BUF_RX_COUNT
 	int
 	default 96 if APP_CRYPTO
-	default 64
+	default 32
 
 config NET_BUF_TX_COUNT
 	int
 	default 96 if APP_CRYPTO
-	default 64
+	default 32
 
 config NET_SOCKETS_TLS_MAX_CONTEXTS
 	int
@@ -319,12 +319,12 @@ config NET_SOCKETS_SERVICE_STACK_SIZE
 config NET_MAX_CONTEXTS
 	int
 	depends on HTTP_SERVER
-	default 12
+	default 8
 
 config NET_MAX_CONN
 	int
 	depends on HTTP_SERVER
-	default 16
+	default 8
 
 config ZVFS_EVENTFD_MAX
 	int
@@ -399,7 +399,7 @@ if APP_CONSOLE_LOGGER
 config APP_CONSOLE_LOG_SIZE
 	int "Console log size"
 	range 64 65536
-	default 2048
+	default 1024
 endif
 
 config CONSOLE_BRIDGE

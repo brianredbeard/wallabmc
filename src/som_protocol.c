@@ -30,7 +30,7 @@ static bool som_alive;
 static __nocache uint8_t rx_buf[sizeof(struct som_message)];
 static size_t rx_pos;
 
-#define RX_RING_SIZE 512
+#define RX_RING_SIZE 288
 static uint8_t rx_ring_buf_data[RX_RING_SIZE];
 static struct ring_buf rx_ring;
 static struct k_sem rx_sem;
