@@ -23,6 +23,11 @@ int power_monitor_read(int32_t *voltage_mv, int32_t *current_ma,
 	int ret;
 
 	if (!device_is_ready(ina226_dev)) {
+		/* Reset init flag to allow retry — Zephyr's device_init
+		 * only tries once, but the INA226 may not be powered
+		 * until the host DC rails come up.
+		 */
+		ina226_dev->state->initialized = false;
 		ret = device_init(ina226_dev);
 		if (ret < 0) {
 			return ret;

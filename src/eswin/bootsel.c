@@ -9,6 +9,8 @@
 #include <zephyr/logging/log.h>
 #include <stdlib.h>
 
+#include "bootsel.h"
+
 LOG_MODULE_REGISTER(bootsel, LOG_LEVEL_INF);
 
 #define BOOTSEL_COUNT 4
@@ -23,7 +25,7 @@ static const struct gpio_dt_spec bootsel_gpios[BOOTSEL_COUNT] = {
 /* false = HW mode (input, follows DIP switch), true = SW mode (output) */
 static bool sw_mode;
 
-static int bootsel_set_hw_mode(void)
+int bootsel_set_hw_mode(void)
 {
 	for (int i = 0; i < BOOTSEL_COUNT; i++) {
 		int ret = gpio_pin_configure_dt(&bootsel_gpios[i], GPIO_INPUT);
@@ -37,7 +39,7 @@ static int bootsel_set_hw_mode(void)
 	return 0;
 }
 
-static int bootsel_set_sw_mode(uint8_t value)
+int bootsel_set_sw_mode(uint8_t value)
 {
 	for (int i = 0; i < BOOTSEL_COUNT; i++) {
 		int ret = gpio_pin_configure_dt(&bootsel_gpios[i],
@@ -58,7 +60,7 @@ static int bootsel_set_sw_mode(uint8_t value)
 	return 0;
 }
 
-static int bootsel_read(uint8_t *value)
+int bootsel_read(uint8_t *value)
 {
 	*value = 0;
 	for (int i = 0; i < BOOTSEL_COUNT; i++) {
@@ -71,7 +73,12 @@ static int bootsel_read(uint8_t *value)
 	return 0;
 }
 
-static const char *bootsel_boot_source(uint8_t sel)
+bool bootsel_is_sw_mode(void)
+{
+	return sw_mode;
+}
+
+const char *bootsel_boot_source(uint8_t sel)
 {
 	switch (sel & 0x0F) {
 	case 0x00: return "SCPU ROM -> UART";

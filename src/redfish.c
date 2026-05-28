@@ -31,6 +31,10 @@
 #include "vpd.h"
 #include "git_sha.h"
 #include "eswin/board_identity.h"
+#include "eswin/som_protocol.h"
+#include "eswin/bootsel.h"
+#include "power_monitor.h"
+#include "fan.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -1243,14 +1247,14 @@ REDFISH_HANDLER(systems_collection, "/redfish/v1/Systems",
 /* System Info: ResetType array */
 struct redfish_reset_action {
 	const char *target;
-	const char *reset_type_values[3];
+	const char *reset_type_values[6];
 	size_t reset_type_values_len;
 };
 static const struct json_obj_descr reset_action_descr[] = {
 	JSON_OBJ_DESCR_PRIM(struct redfish_reset_action, target, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_reset_action,
 				   "ResetType@Redfish.AllowableValues",
-				   reset_type_values, 3, reset_type_values_len,
+				   reset_type_values, 6, reset_type_values_len,
 				   JSON_TOK_STRING),
 };
 
@@ -1305,6 +1309,33 @@ static const struct json_obj_descr memory_summary_descr[] = {
 				  total_system_GiB, JSON_TOK_NUMBER),
 };
 
+struct redfish_system_oem_wallabmc {
+	const char *som_daemon_state;
+	int32_t boot_sel;
+	const char *boot_sel_mode;
+	const char *boot_source;
+};
+static const struct json_obj_descr system_oem_wallabmc_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_system_oem_wallabmc,
+				   "SomDaemonState", som_daemon_state,
+				   JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_system_oem_wallabmc,
+				   "BootSel", boot_sel, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_system_oem_wallabmc,
+				   "BootSelMode", boot_sel_mode,
+				   JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_system_oem_wallabmc,
+				   "BootSource", boot_source,
+				   JSON_TOK_STRING),
+};
+struct redfish_system_oem {
+	struct redfish_system_oem_wallabmc wallabmc;
+};
+static const struct json_obj_descr system_oem_descr[] = {
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_system_oem, "WallaBMC",
+				     wallabmc, system_oem_wallabmc_descr),
+};
+
 struct redfish_computer_system {
 	const char *odata_id;
 	const char *odata_type;
@@ -1322,6 +1353,7 @@ struct redfish_computer_system {
 	struct redfish_memory_summary memory_summary;
 	struct redfish_actions actions;
 	struct redfish_system_links links;
+	struct redfish_system_oem oem;
 };
 static const struct json_obj_descr computer_system_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
@@ -1354,6 +1386,8 @@ static const struct json_obj_descr computer_system_descr[] = {
 				    links, system_links_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
 				    actions, actions_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Oem",
+				    oem, system_oem_descr),
 };
 
 /* PATCH /redfish/v1/Systems/system */
@@ -1386,12 +1420,45 @@ static int system_patch_handler(struct http_resource_user_data *user_data)
 		}
 	}
 
+#ifdef CONFIG_BOOTSEL
+	if (payload.oem.wallabmc.boot_sel_mode) {
+		if (!strcmp(payload.oem.wallabmc.boot_sel_mode, "Hardware")) {
+			ret = bootsel_set_hw_mode();
+		} else if (!strcmp(payload.oem.wallabmc.boot_sel_mode, "Software")) {
+			if (payload.oem.wallabmc.boot_sel < 0 ||
+			    payload.oem.wallabmc.boot_sel > 15) {
+				LOG_ERR("System: BootSel value out of range");
+				return HTTP_400_BAD_REQUEST;
+			}
+			ret = bootsel_set_sw_mode(
+				(uint8_t)payload.oem.wallabmc.boot_sel);
+		} else {
+			LOG_ERR("System: Bad BootSelMode value");
+			return HTTP_400_BAD_REQUEST;
+		}
+		if (ret) {
+			LOG_ERR("Failed to set boot mode (err=%d)", ret);
+			return HTTP_500_INTERNAL_SERVER_ERROR;
+		}
+	}
+#endif
+
 	return 0;
 }
 
 /* GET /redfish/v1/Systems/system */
 static int system_get_handler(struct http_resource_user_data *user_data)
 {
+	uint8_t bootsel_val = 0;
+	const char *bootsel_mode = "Hardware";
+	const char *bootsel_source = "Unknown";
+
+#ifdef CONFIG_BOOTSEL
+	bootsel_read(&bootsel_val);
+	bootsel_mode = bootsel_is_sw_mode() ? "Software" : "Hardware";
+	bootsel_source = bootsel_boot_source(bootsel_val);
+#endif
+
 	const struct redfish_computer_system computer_system = {
 		.odata_id = "/redfish/v1/Systems/system",
 		.odata_type = "#ComputerSystem.v1_22_0.ComputerSystem",
@@ -1432,9 +1499,20 @@ static int system_get_handler(struct http_resource_user_data *user_data)
 				.reset_type_values = {
 					"On",
 					"ForceOff",
-					"PowerCycle"
+					"ForceRestart",
+					"PowerCycle",
+					"GracefulShutdown",
+					"GracefulRestart"
 				},
-				.reset_type_values_len = 3
+				.reset_type_values_len = 6
+			}
+		},
+		.oem = {
+			.wallabmc = {
+				.som_daemon_state = som_is_alive() ? "Online" : "Offline",
+				.boot_sel = bootsel_val,
+				.boot_sel_mode = bootsel_mode,
+				.boot_source = bootsel_source,
 			}
 		}
 	};
@@ -1487,8 +1565,13 @@ static int system_reset_post_handler(struct http_resource_user_data *user_data)
 		power_set_state(true);
 	} else if (strcmp(payload.reset_type, "ForceOff") == 0) {
 		power_set_state(false);
-	} else if (strcmp(payload.reset_type, "PowerCycle") == 0) {
+	} else if (strcmp(payload.reset_type, "ForceRestart") == 0 ||
+		   strcmp(payload.reset_type, "PowerCycle") == 0) {
 		power_reset();
+	} else if (strcmp(payload.reset_type, "GracefulShutdown") == 0) {
+		power_graceful_off();
+	} else if (strcmp(payload.reset_type, "GracefulRestart") == 0) {
+		power_graceful_restart();
 	} else {
 		LOG_ERR("ComputerSystem.Reset: Bad reset type");
 		return HTTP_400_BAD_REQUEST;
@@ -1563,6 +1646,8 @@ struct redfish_chassis {
 	const char *model;
 	const char *serial_number;
 	const char *power_state;
+	struct redfish_link power;
+	struct redfish_link thermal;
 	struct redfish_link sensors;
 	struct redfish_chassis_links links;
 };
@@ -1585,6 +1670,10 @@ static const struct json_obj_descr chassis_descr[] = {
 				  serial_number, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "PowerState",
 				  power_state, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Power",
+				    power, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Thermal",
+				    thermal, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Sensors",
 				    sensors, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Links",
@@ -1604,6 +1693,12 @@ static int chassis_get_handler(struct http_resource_user_data *user_data)
 		.model = CONFIG_REDFISH_SYSTEM_MODEL,
 		.serial_number = board_identity_serial(),
 		.power_state = power_get_state() ? "On" : "Off",
+		.power = {
+			.odata_id = "/redfish/v1/Chassis/1/Power"
+		},
+		.thermal = {
+			.odata_id = "/redfish/v1/Chassis/1/Thermal"
+		},
 		.sensors = {
 			.odata_id = "/redfish/v1/Chassis/1/Sensors"
 		},
@@ -1637,6 +1732,140 @@ static int chassis_get_handler(struct http_resource_user_data *user_data)
 REDFISH_HANDLER(chassis, "/redfish/v1/Chassis/1",
 		true, /* require auth */
 		chassis_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1/Power ***/
+
+/* GET /redfish/v1/Chassis/1/Power */
+static int chassis_power_get_handler(struct http_resource_user_data *user_data)
+{
+	int32_t voltage_mv = 0, current_ma = 0, power_mw = 0;
+	char buf[320];
+	int len;
+
+	power_monitor_read(&voltage_mv, &current_ma, &power_mw);
+
+	len = snprintf(buf, sizeof(buf),
+		"{\"@odata.id\":\"/redfish/v1/Chassis/1/Power\","
+		"\"@odata.type\":\"#Power.v1_7_0.Power\","
+		"\"Name\":\"Power\","
+		"\"PowerControl\":[{"
+		"\"PowerConsumedWatts\":%d.%03d,"
+		"\"PowerMetrics\":{"
+		"\"InputVoltage\":%d.%03d,"
+		"\"InputCurrent\":%d.%03d"
+		"}}]}",
+		power_mw / 1000, power_mw % 1000,
+		voltage_mv / 1000, voltage_mv % 1000,
+		current_ma / 1000, current_ma % 1000);
+
+	if (user_data_json_append(buf, len, user_data) < 0)
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+
+	return 0;
+}
+
+REDFISH_HANDLER(chassis_power, "/redfish/v1/Chassis/1/Power",
+		true, /* require auth */
+		chassis_power_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1/Thermal ***/
+
+#define REDFISH_FAN_COUNT 2
+
+/* GET /redfish/v1/Chassis/1/Thermal */
+static int chassis_thermal_get_handler(struct http_resource_user_data *user_data)
+{
+	char buf[512];
+	int len, off = 0;
+
+	off += snprintf(buf + off, sizeof(buf) - off,
+		"{\"@odata.id\":\"/redfish/v1/Chassis/1/Thermal\","
+		"\"@odata.type\":\"#Thermal.v1_7_0.Thermal\","
+		"\"Name\":\"Thermal\","
+		"\"Fans\":[");
+
+	for (int i = 0; i < REDFISH_FAN_COUNT; i++) {
+		int duty = fan_get_duty(i);
+		int rpm = fan_get_rpm(i);
+
+		if (duty < 0)
+			duty = 0;
+		if (rpm < 0)
+			rpm = 0;
+
+		off += snprintf(buf + off, sizeof(buf) - off,
+			"%s{\"Name\":\"Fan %d\","
+			"\"Reading\":%d,"
+			"\"ReadingUnits\":\"RPM\","
+			"\"Oem\":{\"DutyCycle\":%d}}",
+			i > 0 ? "," : "", i, rpm, duty);
+	}
+
+	off += snprintf(buf + off, sizeof(buf) - off, "]}");
+
+	if (user_data_json_append(buf, off, user_data) < 0)
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+
+	return 0;
+}
+
+struct redfish_fan_oem_patch {
+	int32_t duty_cycle;
+};
+static const struct json_obj_descr fan_oem_patch_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_fan_oem_patch, "DutyCycle",
+				   duty_cycle, JSON_TOK_NUMBER),
+};
+struct redfish_fan_patch {
+	struct redfish_fan_oem_patch oem;
+};
+static const struct json_obj_descr fan_patch_descr[] = {
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_fan_patch, "Oem",
+				     oem, fan_oem_patch_descr),
+};
+struct redfish_thermal_patch {
+	struct redfish_fan_patch fans[REDFISH_FAN_COUNT];
+	size_t fans_len;
+};
+static const struct json_obj_descr thermal_patch_descr[] = {
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_thermal_patch, "Fans",
+					fans, REDFISH_FAN_COUNT, fans_len,
+					fan_patch_descr, ARRAY_SIZE(fan_patch_descr)),
+};
+
+/* PATCH /redfish/v1/Chassis/1/Thermal */
+static int chassis_thermal_patch_handler(struct http_resource_user_data *user_data)
+{
+	struct redfish_thermal_patch payload;
+	int ret;
+
+	memset(&payload, 0, sizeof(payload));
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
+			     thermal_patch_descr, ARRAY_SIZE(thermal_patch_descr),
+			     &payload);
+	if (ret < 0) {
+		LOG_ERR("Thermal: Bad JSON (err=%d)", ret);
+		return HTTP_400_BAD_REQUEST;
+	}
+
+	for (size_t i = 0; i < payload.fans_len && i < REDFISH_FAN_COUNT; i++) {
+		int duty = payload.fans[i].oem.duty_cycle;
+		if (duty < 0)
+			continue;
+		if (duty > 100) {
+			LOG_ERR("Thermal: invalid duty cycle %d for fan %zu",
+				duty, i);
+			return HTTP_400_BAD_REQUEST;
+		}
+		fan_set_duty(i, duty);
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(chassis_thermal, "/redfish/v1/Chassis/1/Thermal",
+		true, /* require auth */
+		chassis_thermal_get_handler, chassis_thermal_patch_handler, NULL);
 
 /*** /redfish/v1/Chassis/1/Sensors ***/
 

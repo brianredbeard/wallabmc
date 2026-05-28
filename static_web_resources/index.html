@@ -531,6 +531,8 @@
 				<nav class="sidebar">
 					<a class="sidebar-item active" data-section="system-overview" href="#" onclick="showSection('system-overview'); return false;">System Overview</a>
 					<a class="sidebar-item" data-section="power-control" href="#" onclick="showSection('power-control'); return false;">Host Power Control</a>
+					<a class="sidebar-item" data-section="power-monitor" href="#" onclick="showSection('power-monitor'); return false;">Power Monitor</a>
+					<a class="sidebar-item" data-section="fan-control" href="#" onclick="showSection('fan-control'); return false;">Fan Control</a>
 					<a class="sidebar-item" data-section="host-console" href="#" onclick="showSection('host-console'); return false;">Host Console</a>
 					<a class="sidebar-item" data-section="bmc" href="#" onclick="showSection('bmc'); return false;">BMC Settings</a>
 					<a class="sidebar-item" data-section="bmc-shell" href="#" onclick="showSection('bmc-shell'); return false;">BMC Shell</a>
@@ -554,6 +556,29 @@
 								<div class="info-item"><span class="info-item-label">CPU</span><span class="data-value" id="sys-cpu-model">Loading...</span></div>
 								<div class="info-item"><span class="info-item-label">CPU Count</span><span class="data-value" id="sys-cpu">Loading...</span></div>
 								<div class="info-item"><span class="info-item-label">Memory</span><span class="data-value" id="sys-memory">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">SOM Daemon</span><span id="som-state-badge" class="badge">Unknown</span></div>
+							</div>
+						</div>
+						<div class="card">
+							<h2>Boot Mode</h2>
+							<div class="grid-3-col">
+								<div class="info-item"><span class="info-item-label">Mode</span><span class="data-value" id="boot-mode">--</span></div>
+								<div class="info-item"><span class="info-item-label">BOOT_SEL</span><span class="data-value" id="boot-sel-value">--</span></div>
+								<div class="info-item"><span class="info-item-label">Boot Source</span><span class="data-value" id="boot-source">--</span></div>
+							</div>
+							<div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+								<select id="boot-mode-select" style="padding: 6px 10px;">
+									<option value="hw">Hardware (DIP switch)</option>
+									<option value="0">0 - SCPU ROM &rarr; UART</option>
+									<option value="1">1 - SCPU ROM &rarr; eMMC</option>
+									<option value="2">2 - SCPU ROM &rarr; SPI NOR</option>
+									<option value="3">3 - SCPU ROM &rarr; USB</option>
+									<option value="4">4 - SCPU SPI NOR &rarr; UART</option>
+									<option value="5">5 - SCPU SPI NOR &rarr; eMMC</option>
+									<option value="6">6 - SCPU SPI NOR &rarr; SPI NOR</option>
+									<option value="7">7 - SCPU SPI NOR &rarr; USB</option>
+								</select>
+								<button onclick="setBootMode()">Apply</button>
 							</div>
 						</div>
 					</div>
@@ -595,9 +620,29 @@
 							</div>
 							<div class="controls-grid">
 								<button onclick="sendPowerAction('On')">Power On</button>
+								<button onclick="sendPowerAction('GracefulShutdown')">Graceful Shutdown</button>
+								<button onclick="sendPowerAction('GracefulRestart')">Graceful Restart</button>
 								<button class="danger" onclick="sendPowerAction('ForceOff')">Force Off</button>
 								<button class="danger" onclick="sendPowerAction('ForceRestart')">Force Restart</button>
 							</div>
+						</div>
+					</div>
+
+					<div id="section-power-monitor" class="hidden">
+						<div class="card">
+							<h2>Power Monitor</h2>
+							<div class="grid-3-col">
+								<div class="info-item"><span class="info-item-label">Voltage</span><span class="data-value" id="pwr-voltage">--</span></div>
+								<div class="info-item"><span class="info-item-label">Current</span><span class="data-value" id="pwr-current">--</span></div>
+								<div class="info-item"><span class="info-item-label">Power</span><span class="data-value" id="pwr-watts">--</span></div>
+							</div>
+						</div>
+					</div>
+
+					<div id="section-fan-control" class="hidden">
+						<div class="card">
+							<h2>Fan Control</h2>
+							<div id="fan-panels"></div>
 						</div>
 					</div>
 
@@ -1010,6 +1055,18 @@
 			setText('power-state-badge', sysData.PowerState);
 			pstate.className = 'badge ' + (sysData.PowerState || 'Unknown').replace(/\s/g, '');
 
+			const somOem = sysData.Oem && sysData.Oem.WallaBMC;
+			const somState = somOem ? somOem.SomDaemonState : 'Unknown';
+			const somBadge = document.getElementById('som-state-badge');
+			setText('som-state-badge', somState);
+			somBadge.className = 'badge ' + (somState === 'Online' ? 'On' : 'Off');
+
+			if (somOem) {
+				setText('boot-mode', somOem.BootSelMode || 'N/A');
+				setText('boot-sel-value', somOem.BootSel != null ? somOem.BootSel : 'N/A');
+				setText('boot-source', somOem.BootSource || 'N/A');
+			}
+
 			setText('bmc-uuid', bmcData.UUID);
 			setText('bmc-name', bmcData.Name);
 			setText('bmc-firmware-version', bmcData.FirmwareVersion);
@@ -1034,6 +1091,40 @@
 			}
 
 			refreshTimer = setTimeout(refreshSystemData, 10000);
+
+			try {
+				const powerData = await redfishCall('/redfish/v1/Chassis/1/Power');
+				if (powerData.PowerControl && powerData.PowerControl.length > 0) {
+					const pc = powerData.PowerControl[0];
+					const pm = pc.PowerMetrics || {};
+					setText('pwr-voltage', pm.InputVoltage != null ? pm.InputVoltage.toFixed(3) + ' V' : 'N/A');
+					setText('pwr-current', pm.InputCurrent != null ? pm.InputCurrent.toFixed(3) + ' A' : 'N/A');
+					setText('pwr-watts', pc.PowerConsumedWatts != null ? pc.PowerConsumedWatts.toFixed(3) + ' W' : 'N/A');
+				}
+			} catch (err) {
+				console.error('Power fetch failed:', err);
+			}
+
+			try {
+				const thermalData = await redfishCall('/redfish/v1/Chassis/1/Thermal');
+				const container = document.getElementById('fan-panels');
+				if (thermalData.Fans && thermalData.Fans.length > 0) {
+					container.innerHTML = thermalData.Fans.map((fan, i) => `
+						<div class="grid-3-col" style="margin-bottom: 10px;">
+							<div class="info-item"><span class="info-item-label">${fan.Name}</span><span class="data-value">${fan.Reading} RPM</span></div>
+							<div class="info-item"><span class="info-item-label">Duty Cycle</span><span class="data-value">${fan.Oem ? fan.Oem.DutyCycle : 'N/A'}%</span></div>
+							<div class="info-item">
+								<span class="info-item-label">Set Duty</span>
+								<input type="range" min="0" max="100" value="${fan.Oem ? fan.Oem.DutyCycle : 50}"
+									onchange="setFanDuty(${i}, this.value)"
+									style="width: 100%;">
+							</div>
+						</div>
+					`).join('');
+				}
+			} catch (err) {
+				console.error('Thermal fetch failed:', err);
+			}
 		}
 
 		async function refreshConfigData() {
@@ -1251,6 +1342,39 @@
 			}
 		}
 
+		async function setBootMode() {
+			const sel = document.getElementById('boot-mode-select').value;
+			try {
+				if (sel === 'hw') {
+					await redfishCall(systemIdPath, 'PATCH', {
+						Oem: {WallaBMC: {BootSelMode: 'Hardware', BootSel: 0}}
+					});
+				} else {
+					await redfishCall(systemIdPath, 'PATCH', {
+						Oem: {WallaBMC: {BootSelMode: 'Software', BootSel: parseInt(sel)}}
+					});
+				}
+				await refreshSystemData();
+			} catch (err) {
+				alert(`Failed to set boot mode: ${err.message}`);
+			}
+		}
+
+		async function setFanDuty(fanIndex, duty) {
+			try {
+				const fans = [];
+				for (let i = 0; i < 2; i++) {
+					if (i === fanIndex)
+						fans.push({Oem: {DutyCycle: parseInt(duty)}});
+					else
+						fans.push({Oem: {DutyCycle: -1}});
+				}
+				await redfishCall('/redfish/v1/Chassis/1/Thermal', 'PATCH', {Fans: fans});
+			} catch (err) {
+				alert(`Failed to set fan duty: ${err.message}`);
+			}
+		}
+
 		async function syncTimeToBrowser(resetType) {
 			try {
 				const new_date = new Date();
@@ -1280,7 +1404,7 @@
 		});
 
 		// --- Sidebar navigation ---
-		const SECTIONS = ['system-overview', 'host-console', 'bmc-shell', 'power-control', 'bmc', 'sensors'];
+		const SECTIONS = ['system-overview', 'host-console', 'bmc-shell', 'power-control', 'power-monitor', 'fan-control', 'bmc', 'sensors'];
 
 		function toggleSidebar() {
 			const sidebar = document.querySelector('.sidebar');
@@ -1305,7 +1429,7 @@
 			if (name === 'host-console' && !hostWsConsole) {
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 				const wsUrl = `${socketProtocol}//${window.location.host}/console/host`;
-				hostWsConsole = new WSConsole(wsUrl, document.getElementById('host-terminal-container'), 'Host Serial Console', null, { cols: 80, rows: 24 });
+				hostWsConsole = new WSConsole(wsUrl, document.getElementById('host-terminal-container'), 'Host Serial Console', null);
 			} else if (name === 'bmc-shell' && !bmcWsConsole) {
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 				const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
@@ -1411,40 +1535,31 @@
 				return Math.min(TERM_FONT_SIZE_MAX, Math.max(TERM_FONT_SIZE_MIN, parsedFontSize));
 			}
 
-			constructor(wsUrl, htmlContainer, nameString, promptString, options = {}) {
-				const termOpts = {
+			constructor(wsUrl, htmlContainer, nameString, promptString) {
+				this.term = new Terminal({
+						role: "server",
+						shell: "linux",
 						convertEol: true,
 						cursorBlink: true,
 						theme: getTermTheme(),
 						fontFamily: localStorage.getItem('term-font-family') || 'monospace',
 						fontSize:   WSConsole.getStoredFontSize(),
-				};
-				if (options.cols) termOpts.cols = options.cols;
-				if (options.rows) termOpts.rows = options.rows;
-
-				this.term = new Terminal(termOpts);
+				});
 				this.fitAddon = new FitAddon.FitAddon();
 				this.term.loadAddon(this.fitAddon);
 
 				this.term.open(htmlContainer);
+				this.fitAddon.fit();
 
-				if (options.cols) {
-					// Fixed-size terminal (e.g., host serial console at 80x24).
-					// Don't auto-fit — the remote side queries terminal size
-					// and must get a standard width.
-				} else {
-					this.fitAddon.fit();
-
-					// Refit whenever the surrounding terminal window is resized.
-					const termWindow = htmlContainer.closest('.term-window');
-					if (termWindow) {
-						if (window.ResizeObserver) {
-							this.resizeObserver = new ResizeObserver(() => this.fitAddon.fit());
-							this.resizeObserver.observe(termWindow);
-						} else {
-							this.windowResizeHandler = () => this.fitAddon.fit();
-							window.addEventListener('resize', this.windowResizeHandler);
-						}
+				// Refit whenever the surrounding terminal window is resized.
+				const termWindow = htmlContainer.closest('.term-window');
+				if (termWindow) {
+					if (window.ResizeObserver) {
+						this.resizeObserver = new ResizeObserver(() => this.fitAddon.fit());
+						this.resizeObserver.observe(termWindow);
+					} else {
+						this.windowResizeHandler = () => this.fitAddon.fit();
+						window.addEventListener('resize', this.windowResizeHandler);
 					}
 				}
 
