@@ -9,6 +9,8 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/logging/log.h>
 
+#include "power.h"
+
 LOG_MODULE_REGISTER(power_monitor, LOG_LEVEL_INF);
 
 #define INA226_NODE DT_NODELABEL(ina226)
@@ -22,11 +24,11 @@ int power_monitor_read(int32_t *voltage_mv, int32_t *current_ma,
 	struct sensor_value val;
 	int ret;
 
+	if (!power_get_state()) {
+		return -ENODEV;
+	}
+
 	if (!device_is_ready(ina226_dev)) {
-		/* Reset init flag to allow retry — Zephyr's device_init
-		 * only tries once, but the INA226 may not be powered
-		 * until the host DC rails come up.
-		 */
 		ina226_dev->state->initialized = false;
 		ret = device_init(ina226_dev);
 		if (ret < 0) {
@@ -67,6 +69,10 @@ static int cmd_power_info(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	ret = power_monitor_read(&voltage_mv, &current_ma, &power_mw);
+	if (ret == -ENODEV) {
+		shell_error(sh, "Power monitor unavailable (host power off)");
+		return ret;
+	}
 	if (ret < 0) {
 		shell_error(sh, "Failed to read power monitor: %d", ret);
 		return ret;
