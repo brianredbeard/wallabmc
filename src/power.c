@@ -29,6 +29,7 @@ static void power_graceful_init(void);
 #define STATUS_LED DT_ALIAS(status_led)
 #define GPIO_POWER_GOOD DT_ALIAS(power_good)
 #define GPIO_POWER_LED  DT_ALIAS(power_led)
+#define GPIO_SLEEP_LED  DT_ALIAS(sleep_led)
 
 static const struct gpio_dt_spec power_gpios[] = {
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_1)
@@ -47,6 +48,11 @@ static const struct gpio_dt_spec power_good_gpio =
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
 static const struct gpio_dt_spec power_led_gpio =
 	GPIO_DT_SPEC_GET(GPIO_POWER_LED, gpios);
+#endif
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_SLEEP_LED)
+static const struct gpio_dt_spec sleep_led_gpio =
+	GPIO_DT_SPEC_GET(GPIO_SLEEP_LED, gpios);
 #endif
 
 static const struct gpio_dt_spec gpio_reset =
@@ -105,6 +111,9 @@ static int power_on(void)
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
 	gpio_pin_set_dt(&power_led_gpio, 1);
 #endif
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_SLEEP_LED)
+	gpio_pin_set_dt(&sleep_led_gpio, 0);
+#endif
 
 	system_power_state = true;
 
@@ -122,6 +131,9 @@ static int power_off(void)
 
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
 	gpio_pin_set_dt(&power_led_gpio, 0);
+#endif
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_SLEEP_LED)
+	gpio_pin_set_dt(&sleep_led_gpio, 1);
 #endif
 
 	for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
@@ -185,6 +197,11 @@ int power_init(void)
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
 	if (gpio_is_ready_dt(&power_led_gpio)) {
 		gpio_pin_configure_dt(&power_led_gpio, GPIO_OUTPUT_INACTIVE);
+	}
+#endif
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_SLEEP_LED)
+	if (gpio_is_ready_dt(&sleep_led_gpio)) {
+		gpio_pin_configure_dt(&sleep_led_gpio, GPIO_OUTPUT_ACTIVE);
 	}
 #endif
 

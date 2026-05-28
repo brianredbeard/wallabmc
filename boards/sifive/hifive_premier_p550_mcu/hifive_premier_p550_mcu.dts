@@ -84,6 +84,10 @@
 			gpios = <&gpiod 10 GPIO_ACTIVE_HIGH>;
 			label = "POWER_LED";
 		};
+		slp_led: slp_led_key {
+			gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>;
+			label = "SLEEP_LED";
+		};
 		bootsel0: bootsel0 {
 			gpios = <&gpiod 0 GPIO_ACTIVE_HIGH>;
 			label = "BOOT_SEL0";

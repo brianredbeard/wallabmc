@@ -40,6 +40,7 @@
 	power-good = &pwrok;
 	power-button = &power_button;
 	power-led = &pwr_led;
+	sleep-led = &slp_led;
 
 	host-console-uart = &usart6;
 	host-console-uart-muxsel = &uartmuxsel;
