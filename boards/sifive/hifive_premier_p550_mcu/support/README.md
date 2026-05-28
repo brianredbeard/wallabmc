@@ -71,11 +71,11 @@ gdb
 (gdb) x/4i $pc           # Disassemble at PC
 ```
 
-For source-level debugging of RHEL kernels, point GDB at the debuginfo:
+For source-level kernel debugging, point GDB at the debuginfo tree:
 
 ```gdb
-(gdb) set debug-file-directory ~/rhel10-riscv-debug/usr/lib/debug
-(gdb) set sysroot ~/rhel10-riscv-debug
+(gdb) set debug-file-directory /path/to/debuginfo/usr/lib/debug
+(gdb) set sysroot /path/to/debuginfo
 ```
 
 ## Serial Console

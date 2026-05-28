@@ -4,3 +4,5 @@ build-*.hex
 *.signed.hex
 host/somd/somd
 host/somd/test_protocol
+boards/sifive/hifive_premier_p550_mcu/host-somd/somd
+boards/sifive/hifive_premier_p550_mcu/host-somd/test_protocol

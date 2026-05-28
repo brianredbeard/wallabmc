@@ -86,7 +86,7 @@ Currently implemented in WallaBMC
    * - PC10/PC11
      - UART4 TX/RX
      - ``uart4``
-     - Connected to SoC UART2. BMC-SoC protocol (som_protocol.c). Host-side daemon: host/somd/
+     - Connected to SoC UART2. BMC-SoC protocol (som_protocol.c). Host-side daemon: host-somd/
    * - PE0
      - JTAG TCK
      - ``jtagtck``
@@ -763,7 +763,7 @@ Packet format (267 bytes, 0x10B)
 
 Both request and response use the same 267-byte frame format. The SoC runs a
 matching daemon that receives on its UART2 and responds in the same format.
-See ``host/somd/`` for WallaBMC's implementation of this daemon.
+See ``host-somd/`` for WallaBMC's implementation of this daemon.
 
 Message types
 --------------
