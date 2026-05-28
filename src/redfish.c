@@ -30,6 +30,7 @@
 #include "sensors.h"
 #include "vpd.h"
 #include "git_sha.h"
+#include "board_identity.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -1238,7 +1239,6 @@ REDFISH_HANDLER(systems_collection, "/redfish/v1/Systems",
 		systems_collection_get_handler, NULL, NULL);
 
 /*** /redfish/v1/Systems/system ***/
-static char serial_number[] = "12345";
 
 /* System Info: ResetType array */
 struct redfish_reset_action {
@@ -1401,7 +1401,7 @@ static int system_get_handler(struct http_resource_user_data *user_data)
 		.system_type = "Physical",
 		.manufacturer = CONFIG_REDFISH_SYSTEM_MANUFACTURER,
 		.model = CONFIG_REDFISH_SYSTEM_MODEL,
-		.serial_number = serial_number,
+		.serial_number = board_identity_serial(),
 		.processor_summary = {
 			.odata_type = "#ProcessorSummary.v1_4_0.ProcessorSummary",
 			.count = CONFIG_REDFISH_SYSTEM_PROCESSOR_COUNT,
@@ -1602,7 +1602,7 @@ static int chassis_get_handler(struct http_resource_user_data *user_data)
 		.chassis_type = "StandAlone",
 		.manufacturer = CONFIG_REDFISH_SYSTEM_MANUFACTURER,
 		.model = CONFIG_REDFISH_SYSTEM_MODEL,
-		.serial_number = serial_number,
+		.serial_number = board_identity_serial(),
 		.power_state = power_get_state() ? "On" : "Off",
 		.sensors = {
 			.odata_id = "/redfish/v1/Chassis/1/Sensors"
