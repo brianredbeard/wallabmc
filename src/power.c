@@ -30,6 +30,7 @@ static void power_graceful_init(void);
 #define GPIO_POWER_GOOD DT_ALIAS(power_good)
 #define GPIO_POWER_LED  DT_ALIAS(power_led)
 #define GPIO_SLEEP_LED  DT_ALIAS(sleep_led)
+#define GPIO_POWER_BTN  DT_ALIAS(power_button)
 
 static const struct gpio_dt_spec power_gpios[] = {
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_1)
@@ -167,6 +168,36 @@ int power_set_state(bool on)
 	return 0;
 }
 
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_BTN)
+static const struct gpio_dt_spec power_btn_gpio =
+	GPIO_DT_SPEC_GET(GPIO_POWER_BTN, gpios);
+static struct gpio_callback power_btn_cb_data;
+
+static void power_btn_work_fn(struct k_work *work)
+{
+	if (power_get_state()) {
+#ifdef CONFIG_SOM_PROTOCOL
+		LOG_INF("Power button: graceful shutdown");
+		power_graceful_off();
+#else
+		LOG_INF("Power button: power off");
+		power_set_state(false);
+#endif
+	} else {
+		LOG_INF("Power button: power on");
+		power_set_state(true);
+	}
+}
+
+static K_WORK_DEFINE(power_btn_work, power_btn_work_fn);
+
+static void power_btn_isr(const struct device *dev,
+			   struct gpio_callback *cb, uint32_t pins)
+{
+	k_work_submit(&power_btn_work);
+}
+#endif
+
 int power_init(void)
 {
 	int i;
@@ -202,6 +233,18 @@ int power_init(void)
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_SLEEP_LED)
 	if (gpio_is_ready_dt(&sleep_led_gpio)) {
 		gpio_pin_configure_dt(&sleep_led_gpio, GPIO_OUTPUT_ACTIVE);
+	}
+#endif
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_BTN)
+	if (gpio_is_ready_dt(&power_btn_gpio)) {
+		gpio_pin_configure_dt(&power_btn_gpio, GPIO_INPUT);
+		gpio_pin_interrupt_configure_dt(&power_btn_gpio,
+						GPIO_INT_EDGE_TO_ACTIVE);
+		gpio_init_callback(&power_btn_cb_data, power_btn_isr,
+				   BIT(power_btn_gpio.pin));
+		gpio_add_callback(power_btn_gpio.port, &power_btn_cb_data);
+		LOG_INF("Power button initialized");
 	}
 #endif
 
