@@ -124,114 +124,72 @@ Currently implemented in WallaBMC
      - (part of mac)
      - Ethernet PHY reset. Active LOW.
 
-NOT yet implemented (features to add)
---------------------------------------
-
-SOM reset control (PD5 output, PD6 input)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Also implemented in WallaBMC
+------------------------------
 
 .. list-table::
    :header-rows: 1
 
    * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Active
+     - Signal
+     - DTS node / alias
      - Description
-   * - **PD5**
+   * - PD5
      - SOM WARM RESET
-     - Output
-     - LOW
-     - Drives SOM warm reset. Active-low: assert (drive low) to reset, deassert (drive high or float) to release.
-   * - **PD6**
+     - ``som_reset`` / ``reset-gpio-1``
+     - SOM warm reset. Assert during power-off, release after power-good.
+   * - PD6
      - SOM RESET OUT DETECT
-     - Input
-     - LOW
-     - SOM reset status feedback. Goes low when SOM is in reset. Can be used to confirm reset completed or detect SoC-initiated resets.
-
-**Implementation**: Add ``reset-gpio`` alias in the overlay pointing to a new
-GPIO node for PD5 (active-low). The existing ``power_reset()`` in ``power.c``
-already supports this alias and will pulse it for 1 second. PD6 could
-optionally be used to confirm reset state or detect SoC-initiated resets.
-
-.. code-block:: dts
-
-   /* In the DTS gpio_keys node: */
-   som_reset: som_reset {
-       gpios = <&gpiod 5 GPIO_ACTIVE_LOW>;
-       label = "SOM_RESET";
-   };
-   som_rst_detect: som_rst_detect {
-       gpios = <&gpiod 6 GPIO_ACTIVE_LOW>;
-       label = "SOM_RST_DETECT";
-   };
-
-   /* In the overlay aliases: */
-   reset-gpio = &som_reset;
-
-Power-good monitoring (PE5)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-
-   * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Active
-     - Description
-   * - **PE5**
+     - ``som_rst_detect``
+     - SOM reset feedback input (defined, not yet used in code).
+   * - PE5
      - BUCK POWER GOOD DETECTION
-     - Input
-     - HIGH
-     - Combined power-good from VDD_5V_SOM_PG and VDD_5V_SYS_PG buck converters. HIGH = power rails stable.
-
-**Implementation**: Add a GPIO input node. Use it to:
-
-#. Confirm power-on completed successfully after asserting DC_EN + ATX_PS_ON
-#. Detect unexpected power loss (interrupt on falling edge)
-#. Report true hardware power status via Redfish and shell (instead of just
-   tracking the software-requested state)
-
-.. code-block:: dts
-
-   pwrok: pwrok {
-       gpios = <&gpioe 5 GPIO_ACTIVE_HIGH>;
-       label = "DCDC_PWR_OK";
-   };
-
-Power button input (PA12)
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-
-   * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Active
-     - Description
-   * - **PA12**
+     - ``pwrok`` / ``power-good``
+     - DC power good input. Polled during power-on with configurable timeout.
+   * - PA12
      - POWER ON KEY
-     - Input
-     - LOW
-     - Front-panel power button press detection. Active-low.
+     - ``power_button`` / ``power-button``
+     - Front-panel power button. Toggles power state on press (graceful shutdown if SOM protocol available).
+   * - PD0-PD3
+     - SOM BOOT MODE CTRL 0-3
+     - ``bootsel0``-``bootsel3`` / ``bootsel-0``-``bootsel-3``
+     - Boot source selection. Hardware mode (follow DIP switch) or software mode (MCU drives).
+   * - PD12/PD13
+     - TIM4 CH1/CH2 PWM
+     - ``fan0``/``fan1`` (via ``pwm4``)
+     - Fan PWM speed control (25 kHz). Shell: ``fan set <0|1> <0-100>``.
+   * - PD10
+     - POWER LED
+     - ``pwr_led`` / ``power-led``
+     - Front-panel power LED. On when host power is on.
+   * - PD11
+     - SLEEP LED
+     - ``slp_led`` / ``sleep-led``
+     - Front-panel sleep LED. On when host power is off (standby).
+   * - PA3
+     - I2C_MUX_EN
+     - ``i2c_mux_en`` / ``i2c-mux-en``
+     - TMUX1574 mux control. Enabled before EEPROM access.
+   * - PC8
+     - EEPROM WRITE PROTECT
+     - ``eeprom_wp`` / ``eeprom-wp``
+     - EEPROM write-protect control.
+   * - PB6/PB7
+     - I2C1 SCL/SDA
+     - ``&i2c1``
+     - AT24C02C EEPROM (carrier board identity, MACs). Deferred init.
+   * - PA8/PC9
+     - I2C3 SCL/SDA
+     - ``&i2c3``
+     - INA226 power monitor (12V rail). Deferred init.
 
-**Implementation**: This is distinct from the recovery button (PB1). It allows
-the BMC to detect a physical power button press and trigger power on/off of the
-host. Add as a gpio-key with interrupt support and connect to the power
-on/off logic. Consider toggle behavior (press = power on if off, power off if
-on) and configurable long-press for force-off.
+NOT yet implemented
+--------------------
 
-.. code-block:: dts
+The boot mode tables are retained here for reference.
 
-   power_button: power_button {
-       gpios = <&gpioa 12 GPIO_ACTIVE_LOW>;
-       label = "POWER_BUTTON";
-   };
-
-SOM boot mode selection (PD0, PD1, PD2, PD3)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Boot mode reference (PD0-PD3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. list-table::
    :header-rows: 1
@@ -348,10 +306,7 @@ When OTP security bit = 0 (all 4 bits used):
      - SPI NOR
      - USB
 
-**Implementation**: Add GPIO output nodes for each pin. Implement a ``boot``
-shell command that allows selecting the SoC boot source before power-on or
-reset. Store the selected boot mode in persistent config. Default to
-high-impedance (follow DIP switch) unless explicitly overridden.
+**Status**: Implemented in ``bootsel.c``. Shell command: ``bootsel get``, ``bootsel set <0-15|hw>``.
 
 Fan control (PD12, PD13 PWM outputs; PE6, PB14 tachometer inputs)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -386,20 +341,8 @@ STM32 pinout, but only CH1 and CH2 are listed in the MCU IO function table.
 Both PWM outputs use Timer 4 (TIM4). The tachometer inputs typically provide
 two pulses per revolution for standard PC fans.
 
-**Implementation**: Use Zephyr's PWM driver for TIM4 channels 1 and 2. Use
-GPIO interrupt (rising edge) or timer input capture for tachometer inputs.
-Expose fan speed via Redfish ``Thermal`` resource and a ``fan`` shell command.
-
-.. code-block:: dts
-
-   &timers4 {
-       status = "okay";
-       pwm4: pwm {
-           status = "okay";
-           pinctrl-0 = <&tim4_ch1_pd12 &tim4_ch2_pd13>;
-           pinctrl-names = "default";
-       };
-   };
+**Status**: PWM implemented in ``fan.c``. Shell: ``fan get``, ``fan set <0|1> <0-100>``.
+Tachometer inputs (PE6, PB14) not yet implemented.
 
 I2C buses (I2C1: PB6/PB7, I2C3: PA8/PC9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -460,41 +403,8 @@ This means I2C1 is shared between the MCU, the SoC (I2C10), and the FT4232H
      - HIGH
      - EEPROM write-protect control. HIGH = protected, LOW = writable. (Confirmed: original firmware ``eepromwp-s 0`` writes PC8=LOW="disabled", ``eepromwp-s 1`` writes PC8=HIGH="enabled".)
 
-**Implementation**: Enable I2C1 and I2C3 in device tree. Implement:
-
-#. INA226 driver for 12V rail monitoring (voltage, current, power). Zephyr has
-   an upstream ``ti,ina226`` sensor driver. Expose via Redfish ``Power`` resource.
-#. EEPROM read/write for board identity data (serial number, MAC, etc.)
-#. I2C mux control (PA3) to arbitrate bus access with SoC. Set mux to MCU
-   before I2C1 operations, release after.
-
-.. code-block:: dts
-
-   &i2c1 {
-       pinctrl-0 = <&i2c1_scl_pb6 &i2c1_sda_pb7>;
-       pinctrl-names = "default";
-       status = "okay";
-       clock-frequency = <I2C_BITRATE_STANDARD>;
-
-       eeprom: eeprom@50 {
-           compatible = "atmel,at24";
-           reg = <0x50>;
-           size = <256>;
-       };
-   };
-
-   &i2c3 {
-       pinctrl-0 = <&i2c3_scl_pa8 &i2c3_sda_pc9>;
-       pinctrl-names = "default";
-       status = "okay";
-       clock-frequency = <I2C_BITRATE_STANDARD>;
-
-       ina226: ina226@44 {
-           compatible = "ti,ina226";
-           reg = <0x44>;
-           rshunt-micro-ohms = <1000>; /* 1 mOhm shunt resistor */
-       };
-   };
+**Status**: All implemented. EEPROM in ``board_identity.c`` (deferred init, vendor CRC32).
+INA226 in ``power_monitor.c`` (deferred init). I2C mux controlled via PA3 before EEPROM access.
 
 SPI to SoC (SPI2: PB9, PB10, PC2, PC3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -583,21 +493,8 @@ Front panel LEDs (PD10, PD11)
      - HIGH
      - Front-panel sleep/standby LED indicator
 
-**Implementation**: Add as LED nodes in DTS. Drive PWR_LED on when host power
-is on (track ``power_get_state()``), SLP_LED when host is powered off but BMC is
-running (standby indicator).
-
-.. code-block:: dts
-
-   /* Add to the leds node in DTS: */
-   pwr_led: pwr_led {
-       gpios = <&gpiod 10 GPIO_ACTIVE_HIGH>;
-       label = "Power LED";
-   };
-   slp_led: slp_led {
-       gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>;
-       label = "Sleep LED";
-   };
+**Status**: Implemented in ``power.c``. Power LED tracks host power state;
+sleep LED is inverse (on during standby).
 
 Other/misc GPIO (PE15)
 ~~~~~~~~~~~~~~~~~~~~~~~
