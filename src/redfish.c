@@ -1839,7 +1839,8 @@ static int chassis_thermal_patch_handler(struct http_resource_user_data *user_da
 	struct redfish_thermal_patch payload;
 	int ret;
 
-	memset(&payload, 0, sizeof(payload));
+	memset(&payload, -1, sizeof(payload));
+	payload.fans_len = 0;
 	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
 			     thermal_patch_descr, ARRAY_SIZE(thermal_patch_descr),
 			     &payload);

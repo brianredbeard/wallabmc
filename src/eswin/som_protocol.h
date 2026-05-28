@@ -55,16 +55,19 @@ struct som_power_info {
 
 #ifdef CONFIG_SOM_PROTOCOL
 int som_protocol_init(void);
-#else
-static inline int som_protocol_init(void) { return 0; }
-#endif
-
 int som_cmd(uint8_t cmd, void *data, size_t data_len, uint32_t timeout);
 int som_get_pvt_info(struct som_pvt_info *info);
 bool som_is_alive(void);
 void som_set_alive(bool alive);
-
 typedef void (*som_notify_cb_t)(uint8_t cmd_type);
 void som_set_notify_callback(som_notify_cb_t cb);
+#else
+static inline int som_protocol_init(void) { return 0; }
+static inline int som_cmd(uint8_t c, void *d, size_t l, uint32_t t) { return -ENOTSUP; }
+static inline int som_get_pvt_info(struct som_pvt_info *i) { return -ENOTSUP; }
+static inline bool som_is_alive(void) { return false; }
+static inline void som_set_alive(bool alive) { }
+static inline void som_set_notify_callback(void (*cb)(uint8_t)) { }
+#endif
 
 #endif

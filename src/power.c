@@ -250,8 +250,11 @@ int power_init(void)
 #endif
 
 	if (config_host_auto_poweron()) {
-		/* Power on at BMC boot */
-		power_on();
+		int ret = power_on();
+		if (ret < 0) {
+			LOG_ERR("Auto power-on failed: %d", ret);
+			return ret;
+		}
 	}
 
 #ifdef CONFIG_SOM_PROTOCOL
