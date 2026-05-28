@@ -534,22 +534,6 @@ Known bugs in current DTS/overlay
    whether the MCU bit-bang path connects to the same JTAG chain or is a
    separate debug interface. Hardware verification needed.
 
-Feature implementation priority
-================================
-
-Recommended order based on impact and complexity:
-
-#. **Fix reset-button alias** - one-line DTS fix, enables config-clear button
-#. **SOM reset** (PD5) - add DTS node + alias, existing ``power_reset()`` handles it
-#. **Power-good monitoring** (PE5) - add GPIO input, confirm power state
-#. **Front panel LEDs** (PD10/PD11) - simple GPIO output, track power state
-#. **Power button** (PA12) - GPIO interrupt, triggers power on/off
-#. **I2C3 + INA226** - 12V rail power monitoring, Redfish Power resource
-#. **Fan control** (TIM4 PWM + tachometers) - requires PWM driver, new module
-#. **Boot mode select** (PD0-PD3) - new shell command, persistent config
-#. **I2C1 + EEPROM** - board identity, MAC address storage
-#. **SPI2 to SoC** - MCU-SoC communication channel (lower priority)
-
 Carrier board EEPROM (AT24C02C on I2C1)
 =========================================
 

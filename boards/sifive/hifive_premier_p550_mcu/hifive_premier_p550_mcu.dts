@@ -104,6 +104,14 @@
 			gpios = <&gpiod 3 GPIO_ACTIVE_HIGH>;
 			label = "BOOT_SEL3";
 		};
+		fan_tach0: fan_tach0 {
+			gpios = <&gpioe 6 GPIO_ACTIVE_HIGH>;
+			label = "FAN_TACH0";
+		};
+		fan_tach1: fan_tach1 {
+			gpios = <&gpiob 14 GPIO_ACTIVE_HIGH>;
+			label = "FAN_TACH1";
+		};
 		i2c_mux_en: i2c_mux_en {
 			gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
 			label = "I2C_MUX_EN";

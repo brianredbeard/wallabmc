@@ -6,6 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/pwm.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/logging/log.h>
 #include <stdlib.h>
@@ -13,6 +14,8 @@
 LOG_MODULE_REGISTER(fan, LOG_LEVEL_INF);
 
 #define FAN_COUNT 2
+#define TACH_PULSES_PER_REV 2
+#define TACH_SAMPLE_PERIOD_MS 1000
 
 static const struct pwm_dt_spec fan_pwm[FAN_COUNT] = {
 	PWM_DT_SPEC_GET(DT_NODELABEL(fan0)),
@@ -20,6 +23,54 @@ static const struct pwm_dt_spec fan_pwm[FAN_COUNT] = {
 };
 
 static int fan_duty[FAN_COUNT];
+
+#define FAN_TACH_0 DT_ALIAS(fan_tach_0)
+#define FAN_TACH_1 DT_ALIAS(fan_tach_1)
+
+#if DT_NODE_EXISTS(FAN_TACH_0) && DT_NODE_EXISTS(FAN_TACH_1)
+#define HAS_FAN_TACH 1
+
+static const struct gpio_dt_spec fan_tach_gpio[FAN_COUNT] = {
+	GPIO_DT_SPEC_GET(FAN_TACH_0, gpios),
+	GPIO_DT_SPEC_GET(FAN_TACH_1, gpios),
+};
+
+static struct gpio_callback fan_tach_cb[FAN_COUNT];
+static volatile uint32_t fan_tach_count[FAN_COUNT];
+static int fan_rpm[FAN_COUNT];
+
+static void fan_tach0_isr(const struct device *dev, struct gpio_callback *cb,
+			  uint32_t pins)
+{
+	fan_tach_count[0]++;
+}
+
+static void fan_tach1_isr(const struct device *dev, struct gpio_callback *cb,
+			  uint32_t pins)
+{
+	fan_tach_count[1]++;
+}
+
+static void fan_tach_sample(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(fan_tach_work, fan_tach_sample);
+
+static void fan_tach_sample(struct k_work *work)
+{
+	for (int i = 0; i < FAN_COUNT; i++) {
+		uint32_t count = fan_tach_count[i];
+
+		fan_tach_count[i] = 0;
+		fan_rpm[i] = (count * 60 * 1000) /
+			     (TACH_PULSES_PER_REV * TACH_SAMPLE_PERIOD_MS);
+	}
+	k_work_schedule(&fan_tach_work, K_MSEC(TACH_SAMPLE_PERIOD_MS));
+}
+
+static const gpio_callback_handler_t fan_tach_isrs[FAN_COUNT] = {
+	fan_tach0_isr,
+	fan_tach1_isr,
+};
+#endif /* HAS_FAN_TACH */
 
 int fan_set_duty(int fan_num, int duty_pct)
 {
@@ -53,13 +104,30 @@ int fan_get_duty(int fan_num)
 	return fan_duty[fan_num];
 }
 
+int fan_get_rpm(int fan_num)
+{
+#ifdef HAS_FAN_TACH
+	if (fan_num >= 0 && fan_num < FAN_COUNT) {
+		return fan_rpm[fan_num];
+	}
+#endif
+	return -1;
+}
+
 static int cmd_fan_get(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
 	for (int i = 0; i < FAN_COUNT; i++) {
-		shell_print(sh, "Fan %d: %d%%", i, fan_duty[i]);
+		int rpm = fan_get_rpm(i);
+
+		if (rpm >= 0) {
+			shell_print(sh, "Fan %d: %d%% (%d RPM)", i,
+				    fan_duty[i], rpm);
+		} else {
+			shell_print(sh, "Fan %d: %d%%", i, fan_duty[i]);
+		}
 	}
 	return 0;
 }
@@ -105,6 +173,23 @@ int fan_init(void)
 	for (int i = 0; i < FAN_COUNT; i++) {
 		fan_set_duty(i, CONFIG_FAN_DEFAULT_DUTY_PCT);
 	}
+
+#ifdef HAS_FAN_TACH
+	for (int i = 0; i < FAN_COUNT; i++) {
+		if (!gpio_is_ready_dt(&fan_tach_gpio[i])) {
+			LOG_WRN("Fan %d tach GPIO not ready", i);
+			continue;
+		}
+		gpio_pin_configure_dt(&fan_tach_gpio[i], GPIO_INPUT);
+		gpio_pin_interrupt_configure_dt(&fan_tach_gpio[i],
+						GPIO_INT_EDGE_TO_ACTIVE);
+		gpio_init_callback(&fan_tach_cb[i], fan_tach_isrs[i],
+				   BIT(fan_tach_gpio[i].pin));
+		gpio_add_callback(fan_tach_gpio[i].port, &fan_tach_cb[i]);
+	}
+	k_work_schedule(&fan_tach_work, K_MSEC(TACH_SAMPLE_PERIOD_MS));
+	LOG_INF("Fan tachometer initialized");
+#endif
 
 	LOG_INF("Fan control initialized (%d fans, default %d%%)",
 		FAN_COUNT, CONFIG_FAN_DEFAULT_DUTY_PCT);

@@ -9,8 +9,10 @@
 int fan_init(void);
 int fan_set_duty(int fan_num, int duty_pct);
 int fan_get_duty(int fan_num);
+int fan_get_rpm(int fan_num);
 #else
 static inline int fan_init(void) { return 0; }
+static inline int fan_get_rpm(int fan_num) { return -1; }
 #endif
 
 #endif

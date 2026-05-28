@@ -42,6 +42,9 @@
 	power-led = &pwr_led;
 	sleep-led = &slp_led;
 
+	fan-tach-0 = &fan_tach0;
+	fan-tach-1 = &fan_tach1;
+
 	host-console-uart = &usart6;
 	host-console-uart-muxsel = &uartmuxsel;
 	reset-button = &user_button_recovery;
