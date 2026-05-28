@@ -11,17 +11,12 @@ The P550 debug USB-C port exposes an FTDI FT4232H with four channels:
 
 ## OpenOCD Configuration
 
-`p550_openocd.cfg` supports both targets via a `TARGET` variable:
+`p550_openocd.cfg` supports two targets via a `TARGET` variable:
 
-```bash
-# Flash BMC firmware (default — TARGET=bmc)
-openocd -f p550_openocd.cfg \
-  -c 'program mcuboot.hex verify; program wallabmc.signed.hex verify reset exit'
+- **`bmc`** (default) — STM32F407 on FTDI channel 1
+- **`soc`** — EIC7700X RISC-V on FTDI channel 0
 
-# Debug the RISC-V SoC (TARGET=soc)
-openocd -c 'set TARGET soc' -f p550_openocd.cfg
-# Then connect GDB: target extended-remote localhost:3333
-```
+The target defaults to `bmc` if not specified.
 
 ## Prerequisites
 
@@ -36,21 +31,26 @@ sudo dnf install openocd gdb
 sudo apt-get install openocd gdb-multiarch
 ```
 
-## Flash BMC from CI artifacts
+## Flash BMC firmware
 
-Download the `wallabmc-firmware-hifive_premier_p550_mcu` artifact from a
-successful [GitHub Actions run](https://github.com/tenstorrent/wallabmc/actions):
+From a local build:
 
 ```bash
 openocd -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg \
-  -c 'program mcuboot.hex verify; program wallabmc.signed.hex verify reset exit'
+  -c "init; halt; \
+      program build/mcuboot/zephyr/zephyr.hex verify; \
+      program build/wallabmc/zephyr/zephyr.signed.hex verify; \
+      reset; exit"
 ```
 
-## Flash BMC from a local build
+From CI artifacts (after extracting the firmware zip):
 
 ```bash
 openocd -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg \
-  -c 'program build/mcuboot/zephyr/zephyr.hex verify; program build/wallabmc/zephyr/zephyr.signed.hex verify reset exit'
+  -c "init; halt; \
+      program zephyr.hex verify; \
+      program zephyr.signed.hex verify; \
+      reset; exit"
 ```
 
 ## Debug the RISC-V SoC
@@ -58,7 +58,8 @@ openocd -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg \
 Start OpenOCD targeting the SoC (4 P550 cores):
 
 ```bash
-openocd -c 'set TARGET soc' -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg
+openocd -c 'set TARGET soc' \
+  -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg
 ```
 
 In a separate terminal, connect GDB:
@@ -96,11 +97,14 @@ screen /dev/tty.usbserial-*03 115200  # macOS
 
 **BMC won't halt (DAP WAIT stalls):**
 
+The flash may be read-protected. Unlock it first (erases all flash):
+
 ```bash
-sudo openocd -f p550_openocd.cfg -c 'init; reset; exit'
-sudo openocd -f p550_openocd.cfg \
-  -c 'init; halt; stm32f4x unlock 0; program mcuboot.hex verify; program wallabmc.signed.hex verify reset exit'
+sudo openocd -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg \
+  -c "init; halt; stm32f4x unlock 0; reset; exit"
 ```
+
+Then flash normally.
 
 **USB permission issues:** Close serial console sessions before flashing.
 The FTDI kernel driver claims all channels. On macOS, `sudo` may be required.
@@ -114,6 +118,6 @@ sudo usermod -a -G dialout $(whoami)
 ## Restore SiFive vendor firmware
 
 ```bash
-wget https://raw.githubusercontent.com/sifiveinc/hifive-premier-p550-tools/refs/heads/master/mcu-firmware/STM32F407VET6_BMC.elf
-openocd -f p550_openocd.cfg -c 'program STM32F407VET6_BMC.elf verify reset exit'
+openocd -f boards/sifive/hifive_premier_p550_mcu/support/p550_openocd.cfg \
+  -c "init; halt; program STM32F407VET6_BMC.elf verify; reset; exit"
 ```
