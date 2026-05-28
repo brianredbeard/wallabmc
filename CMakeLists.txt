@@ -17,26 +17,8 @@ else()
 	endif()
 endif()
 
-# Get project git SHA1 if not provided via CMake variable
-if(NOT DEFINED PROJECT_GIT_SHA)
-	# Use the shell script to get git SHA1
-	find_program(BASH_EXECUTABLE bash)
-	if(BASH_EXECUTABLE)
-		execute_process(
-			COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/get_project_git_sha.sh ${CMAKE_CURRENT_SOURCE_DIR}
-			OUTPUT_VARIABLE PROJECT_GIT_SHA
-			OUTPUT_STRIP_TRAILING_WHITESPACE
-			ERROR_QUIET
-		)
-	endif()
-	# Fallback to "unknown" if script didn't work
-	if(NOT DEFINED PROJECT_GIT_SHA OR PROJECT_GIT_SHA STREQUAL "")
-		set(PROJECT_GIT_SHA "unknown")
-	endif()
-endif()
 
-# Define project git SHA1 as compile-time string constant
-target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
+target_include_directories(app PRIVATE src)
 
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
@@ -51,6 +33,20 @@ zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
 # Used for webserver resources
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
+# Generate git SHA header at build time so it stays current across commits
+find_program(BASH_EXECUTABLE bash)
+set(git_sha_header ${gen_dir}/git_sha.h)
+add_custom_target(app_git_sha ALL
+	COMMAND ${CMAKE_COMMAND}
+		-DBASH_EXECUTABLE=${BASH_EXECUTABLE}
+		-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+		-DOUTPUT_FILE=${git_sha_header}
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_git_sha.cmake
+	BYPRODUCTS ${git_sha_header}
+	COMMENT "Generating git SHA header"
+)
+add_dependencies(app app_git_sha)
+
 target_sources(app PRIVATE
 	src/config.c
 	src/dhcp.c
@@ -58,10 +54,15 @@ target_sources(app PRIVATE
 	src/net.c
 	src/power.c
 	src/synch.c
+	src/vpd.c
 )
 
 target_sources_ifdef(CONFIG_RTC app PRIVATE
 	src/rtc.c
+)
+
+target_sources_ifdef(CONFIG_APP_SENSORS app PRIVATE
+	src/sensors.c
 )
 
 target_sources_ifdef(CONFIG_APP_NTP app PRIVATE
@@ -97,6 +98,27 @@ target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 	src/fs.c
 )
 
+target_sources_ifdef(CONFIG_FAN_CONTROL app PRIVATE
+	src/fan.c
+)
+
+target_sources_ifdef(CONFIG_POWER_MONITOR app PRIVATE
+	src/power_monitor.c
+)
+
+# ESWIN EIC7700X / HiFive Premier P550 vendor-specific modules
+target_sources_ifdef(CONFIG_BOOTSEL app PRIVATE
+	src/eswin/bootsel.c
+)
+
+target_sources_ifdef(CONFIG_BOARD_IDENTITY app PRIVATE
+	src/eswin/board_identity.c
+)
+
+target_sources_ifdef(CONFIG_SOM_PROTOCOL app PRIVATE
+	src/eswin/som_protocol.c
+)
+
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
@@ -128,12 +150,55 @@ if(CONFIG_APP_WEB)
 endif()
 
 if(CONFIG_APP_CRYPTO)
+  find_program(OPENSSL_EXECUTABLE openssl)
+  if(NOT OPENSSL_EXECUTABLE)
+    message(FATAL_ERROR "CONFIG_APP_CRYPTO requires openssl in PATH")
+  endif()
+  find_program(BASH_EXECUTABLE bash)
+  if(NOT BASH_EXECUTABLE)
+    message(FATAL_ERROR "Unable to find bash, needed to generate certificates")
+  endif()
+
+  set(generated_certs_dir ${CMAKE_CURRENT_BINARY_DIR}/generated_certs)
+  set(generated_server_cert_der ${generated_certs_dir}/server_cert.der)
+  set(generated_server_privkey_der ${generated_certs_dir}/server_privkey.der)
+
+  add_custom_command(
+    OUTPUT
+      ${generated_server_cert_der}
+      ${generated_server_privkey_der}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${generated_certs_dir}
+    COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/src/certs/gen_ca_cert.sh ${OPENSSL_EXECUTABLE}
+    COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/src/certs/gen_server_cert.sh ${OPENSSL_EXECUTABLE}
+    WORKING_DIRECTORY ${generated_certs_dir}
+    DEPENDS
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/certs/gen_ca_cert.sh
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/certs/gen_server_cert.sh
+    BYPRODUCTS
+      ${generated_certs_dir}/ca_cert.pem
+      ${generated_certs_dir}/ca_privkey.pem
+      ${generated_certs_dir}/ca.srl
+      ${generated_certs_dir}/server_cert.pem
+      ${generated_certs_dir}/server_privkey.pem
+      ${generated_certs_dir}/server_csr.pem
+      ${generated_certs_dir}/server_csr.ext
+    COMMENT "Generating TLS certificates for APP_CRYPTO"
+    VERBATIM
+  )
+
+  add_custom_target(app_generate_certs
+    DEPENDS
+      ${generated_server_cert_der}
+      ${generated_server_privkey_der}
+  )
+  add_dependencies(app app_generate_certs)
+
   foreach(inc_file
     server_cert.der
     server_privkey.der
   )
     generate_inc_file_for_target(app
-      src/certs/${inc_file}
+      ${generated_certs_dir}/${inc_file}
       ${gen_dir}/${inc_file}.inc
     )
   endforeach()

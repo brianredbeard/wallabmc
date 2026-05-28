@@ -8,7 +8,6 @@
 LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 
 #include <zephyr/kernel.h>
-#include <zephyr/version.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/poweroff.h>
 #include <zephyr/shell/shell.h>
@@ -20,10 +19,17 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "http.h"
 #include "power.h"
 #include "rtc.h"
+#include "sensors.h"
 #include "jtag.h"
 #include "console_logger.h"
+#include "eswin/board_identity.h"
+#include "eswin/bootsel.h"
 #include "console_bridge.h"
 #include "console_bridge_ws.h"
+#include "vpd.h"
+#include "git_sha.h"
+#include "fan.h"
+#include "eswin/som_protocol.h"
 
 static bool boot_finished = false;
 
@@ -31,13 +37,6 @@ bool is_boot_finished(void)
 {
 	return boot_finished;
 }
-
-/* Taken from zephyr/kernel/banner.c */
-#if defined(BUILD_VERSION) && !IS_EMPTY(BUILD_VERSION)
-#define BANNER_VERSION STRINGIFY(BUILD_VERSION)
-#else
-#define BANNER_VERSION KERNEL_VERSION_STRING
-#endif /* BUILD_VERSION */
 
 static void print_banner(void)
 {
@@ -206,6 +205,12 @@ int main(void)
 		return -1;
 	}
 
+	LOG_DBG("VPD init");
+	if (vpd_init() < 0) {
+		LOG_ERR("VPD init failed");
+		return -1;
+	}
+
 	LOG_DBG("Filesystem init");
 	if (fs_init() < 0) {
 		LOG_ERR("Filesystem init failed, continuing without persistent storage");
@@ -223,6 +228,12 @@ int main(void)
 		/* Continue */
 	}
 
+	LOG_DBG("Board identity init");
+	if (board_identity_init() < 0) {
+		LOG_ERR("Board identity init failed, MAC from EEPROM unavailable");
+		/* Continue */
+	}
+
 	LOG_DBG("Network init");
 	if (net_init() < 0) {
 		LOG_ERR("Network init failed");
@@ -235,6 +246,12 @@ int main(void)
 		return -1;
 	}
 
+	LOG_DBG("Fan init");
+	if (fan_init() < 0) {
+		LOG_ERR("Fan init failed");
+		/* Continue */
+	}
+
 	LOG_DBG("Reset init");
 	if (reset_init() < 0) {
 		LOG_ERR("Reset init failed");
@@ -245,6 +262,12 @@ int main(void)
 	if (status_led_init() < 0) {
 		LOG_ERR("LED init failed");
 		return -1;
+	}
+
+	LOG_DBG("Boot select init");
+	if (bootsel_init() < 0) {
+		LOG_ERR("Boot select init failed");
+		/* Continue */
 	}
 
 	LOG_DBG("JTAG init");
@@ -275,6 +298,12 @@ int main(void)
 	if (console_bridge_ws_init() < 0) {
 		LOG_ERR("Console bridge WS init failed");
 		return -1;
+	}
+
+	LOG_DBG("SOM protocol init");
+	if (som_protocol_init() < 0) {
+		LOG_ERR("SOM protocol init failed");
+		/* Continue */
 	}
 
 	boot_finished = true;
