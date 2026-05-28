@@ -183,44 +183,17 @@ Also implemented in WallaBMC
      - ``&i2c3``
      - INA226 power monitor (12V rail). Deferred init.
 
-NOT yet implemented
---------------------
+Hardware reference
+===================
 
-The boot mode tables are retained here for reference.
+EIC7700X boot modes (PD0-PD3)
+------------------------------
 
-Boot mode reference (PD0-PD3)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Implemented in ``bootsel.c``. Shell: ``bootsel get``, ``bootsel set <0-15|hw>``.
 
-.. list-table::
-   :header-rows: 1
-
-   * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Description
-   * - **PD0**
-     - SOM BOOT MODE CTRL 0 (BOOT_SEL0)
-     - In/Out
-     - SoC boot source bit 0
-   * - **PD1**
-     - SOM BOOT MODE CTRL 1 (BOOT_SEL1)
-     - In/Out
-     - SoC boot source bit 1
-   * - **PD2**
-     - SOM BOOT MODE CTRL 2 (BOOT_SEL2)
-     - In/Out
-     - SoC boot source bit 2
-   * - **PD3**
-     - SOM BOOT MODE CTRL 3 (BOOT_SEL3)
-     - In/Out
-     - SoC boot source bit 3
-
-These control the EIC7700X SoC boot source. The schematic labels them as
-INOUT with "USER DEFINE" active level, meaning they share control with the
-on-board DIP switch (SW1). The MCU must set its pins to high-impedance
-(input mode) if the DIP switch is being used manually.
-
-**Boot modes** (from EIC7700X documentation):
+The MCU drives BOOT_SEL[3:0] (PD0-PD3) to select the SoC boot source.
+In hardware mode, pins are high-impedance inputs following the DIP switch (SW1).
+In software mode, the MCU drives the pins as outputs.
 
 When OTP security bit = 1 (only lower 2 bits matter):
 
@@ -306,105 +279,50 @@ When OTP security bit = 0 (all 4 bits used):
      - SPI NOR
      - USB
 
-**Status**: Implemented in ``bootsel.c``. Shell command: ``bootsel get``, ``bootsel set <0-15|hw>``.
+I2C bus architecture
+---------------------
 
-Fan control (PD12, PD13 PWM outputs; PE6, PB14 tachometer inputs)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-
-   * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Description
-   * - **PD12**
-     - MCU TIMER4 PWM1 (TIM4_CH1)
-     - Output
-     - CPU/SOM fan PWM speed control
-   * - **PD13**
-     - MCU TIMER4 PWM2 (TIM4_CH2)
-     - Output
-     - Chassis fan PWM speed control
-   * - **PE6**
-     - CHASS FAN TACH1
-     - Input
-     - Chassis fan 1 tachometer (RPM sensing)
-   * - **PB14**
-     - CHASS FAN TACH2
-     - Input
-     - Chassis fan 2 tachometer (RPM sensing)
-
-Note: The schematic also shows TIM4_CH3 (PD14) and TIM4_CH4 (PD15) on the
-STM32 pinout, but only CH1 and CH2 are listed in the MCU IO function table.
-
-Both PWM outputs use Timer 4 (TIM4). The tachometer inputs typically provide
-two pulses per revolution for standard PC fans.
-
-**Status**: PWM implemented in ``fan.c``. Shell: ``fan get``, ``fan set <0|1> <0-100>``.
-Tachometer inputs (PE6, PB14) not yet implemented.
-
-I2C buses (I2C1: PB6/PB7, I2C3: PA8/PC9)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**I2C3** (PA8 SCL, PC9 SDA, PA9 SMBA) - carrier board peripherals:
+**I2C3** (PA8 SCL, PC9 SDA) — dedicated to carrier board peripherals:
 
 .. list-table::
    :header-rows: 1
 
    * - Device
      - Address
-     - I/O Voltage
      - Description
    * - INA226 power monitor
-     - 0x44 (1000100)
-     - 3.3V
-     - 12V input rail power monitor. Measures voltage and current. SMBus alert on PA9 (MCU_I2C3_SMBA) for over-current/over-voltage notification.
+     - 0x44
+     - 12V input rail. Implemented in ``power_monitor.c`` (deferred init).
 
-**I2C1** (PB6 SCL, PB7 SDA) - shared bus:
+**I2C1** (PB6 SCL, PB7 SDA) — shared bus (MCU / SoC / FT4232H):
 
 .. list-table::
    :header-rows: 1
 
    * - Device
      - Address
-     - I/O Voltage
      - Description
    * - AT24C02C EEPROM
-     - 0x50 (1010000)
-     - 1.8V
-     - 2 Kbit EEPROM. Stores carrier board information (serial number, MAC, manufacturing data). Write-protect controlled by PC8 (EEPROM_WP, active LOW per schematic).
+     - 0x50
+     - Carrier board identity (serial, MACs). Implemented in ``board_identity.c`` (deferred init, vendor CRC32).
 
-The schematic notes (page 3 ADDRESS MAP):
+The I2C1 bus is shared via a TMUX1574 mux (U77). PA3 (I2C_MUX_EN) must be
+driven to route the bus to the MCU before EEPROM access. PC8 (EEPROM_WP)
+controls write-protect (HIGH = protected).
 
-   "SOM, FT4232 and BMC MCU share I2C BUS"
+Fan control reference
+----------------------
 
-This means I2C1 is shared between the MCU, the SoC (I2C10), and the FT4232H
-(via BCBUS4/BCBUS5). Bus arbitration is controlled by a TMUX1574 mux (U77).
+PWM implemented in ``fan.c``. Shell: ``fan get``, ``fan set <0|1> <0-100>``.
 
-**Related control GPIOs**:
+PD12 (TIM4_CH1) drives the SOM fan, PD13 (TIM4_CH2) drives the chassis fan.
+25 kHz PWM, 0-100% duty cycle.
 
-.. list-table::
-   :header-rows: 1
+Tachometer inputs PE6 (CHASS_FAN_TACH1) and PB14 (CHASS_FAN_TACH2) are
+defined in the schematic but not yet implemented in code.
 
-   * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Active
-     - Description
-   * - **PA3**
-     - I2C_MUX_EN
-     - Output
-     - \-
-     - Enable TMUX1574 mux (U77) for I2C bus routing. Controls whether SoC or MCU owns the shared I2C1 bus.
-   * - **PC8**
-     - EEPROM WRITE PROTECT
-     - Output
-     - HIGH
-     - EEPROM write-protect control. HIGH = protected, LOW = writable. (Confirmed: original firmware ``eepromwp-s 0`` writes PC8=LOW="disabled", ``eepromwp-s 1`` writes PC8=HIGH="enabled".)
-
-**Status**: All implemented. EEPROM in ``board_identity.c`` (deferred init, vendor CRC32).
-INA226 in ``power_monitor.c`` (deferred init). I2C mux controlled via PA3 before EEPROM access.
+NOT yet implemented
+--------------------
 
 SPI to SoC (SPI2: PB9, PB10, PC2, PC3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -470,31 +388,6 @@ The W25Q32 (32 Mbit / 4 MB SPI flash) footprint exists on the carrier board
 but is **not mounted** by default. If populated, could provide additional
 storage for BMC firmware, logs, or configuration beyond the 512 KB internal
 flash.
-
-Front panel LEDs (PD10, PD11)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-
-   * - STM32 Pin
-     - Signal (from schematic)
-     - Direction
-     - Active
-     - Description
-   * - **PD10**
-     - POWER LED
-     - Output
-     - HIGH
-     - Front-panel power LED indicator
-   * - **PD11**
-     - SLEEP LED
-     - Output
-     - HIGH
-     - Front-panel sleep/standby LED indicator
-
-**Status**: Implemented in ``power.c``. Power LED tracks host power state;
-sleep LED is inverse (on during standby).
 
 Other/misc GPIO (PE15)
 ~~~~~~~~~~~~~~~~~~~~~~~
