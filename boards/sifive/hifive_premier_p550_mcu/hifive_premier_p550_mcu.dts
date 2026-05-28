@@ -236,6 +236,7 @@
 		pagesize = <8>;
 		address-width = <8>;
 		timeout = <5>;
+		zephyr,deferred-init;
 	};
 };
 

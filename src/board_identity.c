@@ -96,11 +96,6 @@ int board_identity_init(void)
 {
 	int ret;
 
-	if (!device_is_ready(eeprom_dev)) {
-		LOG_ERR("EEPROM device not ready");
-		return -ENODEV;
-	}
-
 #if DT_NODE_EXISTS(I2C_MUX_EN_NODE)
 	if (gpio_is_ready_dt(&i2c_mux_gpio)) {
 		gpio_pin_configure_dt(&i2c_mux_gpio, GPIO_OUTPUT_ACTIVE);
@@ -109,9 +104,15 @@ int board_identity_init(void)
 	} else {
 		LOG_WRN("I2C mux GPIO not ready");
 	}
-#else
-	LOG_WRN("I2C mux GPIO not configured in DTS");
 #endif
+
+	if (!device_is_ready(eeprom_dev)) {
+		ret = device_init(eeprom_dev);
+		if (ret < 0) {
+			LOG_ERR("EEPROM device init failed: %d", ret);
+			return ret;
+		}
+	}
 
 #if DT_NODE_EXISTS(EEPROM_WP_NODE)
 	if (gpio_is_ready_dt(&eeprom_wp_gpio)) {
