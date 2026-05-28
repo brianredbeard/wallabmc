@@ -1305,7 +1305,7 @@
 			if (name === 'host-console' && !hostWsConsole) {
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 				const wsUrl = `${socketProtocol}//${window.location.host}/console/host`;
-				hostWsConsole = new WSConsole(wsUrl, document.getElementById('host-terminal-container'), 'Host Serial Console', null);
+				hostWsConsole = new WSConsole(wsUrl, document.getElementById('host-terminal-container'), 'Host Serial Console', null, { cols: 80, rows: 24 });
 			} else if (name === 'bmc-shell' && !bmcWsConsole) {
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 				const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
@@ -1411,31 +1411,40 @@
 				return Math.min(TERM_FONT_SIZE_MAX, Math.max(TERM_FONT_SIZE_MIN, parsedFontSize));
 			}
 
-			constructor(wsUrl, htmlContainer, nameString, promptString) {
-				this.term = new Terminal({
-						role: "server",
-						shell: "linux",
+			constructor(wsUrl, htmlContainer, nameString, promptString, options = {}) {
+				const termOpts = {
 						convertEol: true,
 						cursorBlink: true,
 						theme: getTermTheme(),
 						fontFamily: localStorage.getItem('term-font-family') || 'monospace',
 						fontSize:   WSConsole.getStoredFontSize(),
-				});
+				};
+				if (options.cols) termOpts.cols = options.cols;
+				if (options.rows) termOpts.rows = options.rows;
+
+				this.term = new Terminal(termOpts);
 				this.fitAddon = new FitAddon.FitAddon();
 				this.term.loadAddon(this.fitAddon);
 
 				this.term.open(htmlContainer);
-				this.fitAddon.fit();
 
-				// Refit whenever the surrounding terminal window is resized.
-				const termWindow = htmlContainer.closest('.term-window');
-				if (termWindow) {
-					if (window.ResizeObserver) {
-						this.resizeObserver = new ResizeObserver(() => this.fitAddon.fit());
-						this.resizeObserver.observe(termWindow);
-					} else {
-						this.windowResizeHandler = () => this.fitAddon.fit();
-						window.addEventListener('resize', this.windowResizeHandler);
+				if (options.cols) {
+					// Fixed-size terminal (e.g., host serial console at 80x24).
+					// Don't auto-fit — the remote side queries terminal size
+					// and must get a standard width.
+				} else {
+					this.fitAddon.fit();
+
+					// Refit whenever the surrounding terminal window is resized.
+					const termWindow = htmlContainer.closest('.term-window');
+					if (termWindow) {
+						if (window.ResizeObserver) {
+							this.resizeObserver = new ResizeObserver(() => this.fitAddon.fit());
+							this.resizeObserver.observe(termWindow);
+						} else {
+							this.windowResizeHandler = () => this.fitAddon.fit();
+							window.addEventListener('resize', this.windowResizeHandler);
+						}
 					}
 				}
 
