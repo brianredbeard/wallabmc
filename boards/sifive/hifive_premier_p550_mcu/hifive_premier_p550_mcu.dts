@@ -133,6 +133,7 @@
 		boot1 = &boot1;
 		dcen = &dcen;
 		atxpson = &atxpson;
+		reset-gpio-1 = &som_reset;
 	};
 };
 

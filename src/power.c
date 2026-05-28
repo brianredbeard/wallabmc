@@ -49,6 +49,13 @@ static const struct gpio_dt_spec power_led_gpio =
 	GPIO_DT_SPEC_GET(GPIO_POWER_LED, gpios);
 #endif
 
+static const struct gpio_dt_spec gpio_reset =
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_RESET)
+	GPIO_DT_SPEC_GET(GPIO_RESET, gpios);
+#else
+	{ 0 };
+#endif
+
 static bool system_power_state = false;
 
 bool power_get_state(void)
@@ -69,7 +76,6 @@ static int power_on(void)
 	}
 
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_GOOD)
-	/* Wait for power good */
 	int retries = CONFIG_POWER_GOOD_TIMEOUT_MS / CONFIG_POWER_GOOD_POLL_MS;
 
 	while (retries > 0) {
@@ -91,6 +97,11 @@ static int power_on(void)
 	LOG_INF("Power good detected");
 #endif
 
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_RESET)
+	gpio_pin_set_dt(&gpio_reset, 0);
+	LOG_INF("SOM reset released");
+#endif
+
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
 	gpio_pin_set_dt(&power_led_gpio, 1);
 #endif
@@ -103,6 +114,11 @@ static int power_on(void)
 static int power_off(void)
 {
 	int i, ret;
+
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_RESET)
+	gpio_pin_set_dt(&gpio_reset, 1);
+	k_msleep(10);
+#endif
 
 #if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_LED)
 	gpio_pin_set_dt(&power_led_gpio, 0);
@@ -305,13 +321,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_power_cmds,
 );
 
 SHELL_CMD_REGISTER(power, &sub_power_cmds, "Power commands", NULL);
-
-static const struct gpio_dt_spec gpio_reset =
-#if DT_NODE_HAS_STATUS_OKAY(GPIO_RESET)
-	GPIO_DT_SPEC_GET(GPIO_RESET, gpios);
-#else
-	{ 0 };
-#endif
 
 int reset_init(void)
 {
