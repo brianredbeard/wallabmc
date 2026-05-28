@@ -127,12 +127,12 @@
 		compatible = "pwm-leds";
 
 		fan0: fan_0 {
-			pwms = <&pwm4 1 40000 PWM_POLARITY_NORMAL>;
+			pwms = <&pwm4 1 40000 PWM_POLARITY_INVERTED>;
 			label = "Fan 0";
 		};
 
 		fan1: fan_1 {
-			pwms = <&pwm4 2 40000 PWM_POLARITY_NORMAL>;
+			pwms = <&pwm4 2 40000 PWM_POLARITY_INVERTED>;
 			label = "Fan 1";
 		};
 	};

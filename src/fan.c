@@ -35,41 +35,39 @@ static const struct gpio_dt_spec fan_tach_gpio[FAN_COUNT] = {
 	GPIO_DT_SPEC_GET(FAN_TACH_1, gpios),
 };
 
-static struct gpio_callback fan_tach_cb[FAN_COUNT];
-static volatile uint32_t fan_tach_count[FAN_COUNT];
+#define TACH_POLL_MS 5
+
+static bool fan_tach_prev[FAN_COUNT];
+static uint32_t fan_tach_count[FAN_COUNT];
 static int fan_rpm[FAN_COUNT];
 
-static void fan_tach0_isr(const struct device *dev, struct gpio_callback *cb,
-			  uint32_t pins)
-{
-	fan_tach_count[0]++;
-}
+static void fan_tach_poll(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(fan_tach_poll_work, fan_tach_poll);
 
-static void fan_tach1_isr(const struct device *dev, struct gpio_callback *cb,
-			  uint32_t pins)
-{
-	fan_tach_count[1]++;
-}
+static uint32_t fan_tach_polls;
 
-static void fan_tach_sample(struct k_work *work);
-static K_WORK_DELAYABLE_DEFINE(fan_tach_work, fan_tach_sample);
-
-static void fan_tach_sample(struct k_work *work)
+static void fan_tach_poll(struct k_work *work)
 {
 	for (int i = 0; i < FAN_COUNT; i++) {
-		uint32_t count = fan_tach_count[i];
+		bool now = gpio_pin_get_dt(&fan_tach_gpio[i]) > 0;
 
-		fan_tach_count[i] = 0;
-		fan_rpm[i] = (count * 60 * 1000) /
-			     (TACH_PULSES_PER_REV * TACH_SAMPLE_PERIOD_MS);
+		if (now && !fan_tach_prev[i]) {
+			fan_tach_count[i]++;
+		}
+		fan_tach_prev[i] = now;
 	}
-	k_work_schedule(&fan_tach_work, K_MSEC(TACH_SAMPLE_PERIOD_MS));
-}
 
-static const gpio_callback_handler_t fan_tach_isrs[FAN_COUNT] = {
-	fan_tach0_isr,
-	fan_tach1_isr,
-};
+	if (++fan_tach_polls >= (TACH_SAMPLE_PERIOD_MS / TACH_POLL_MS)) {
+		for (int i = 0; i < FAN_COUNT; i++) {
+			fan_rpm[i] = (fan_tach_count[i] * 60 * 1000) /
+				     (TACH_PULSES_PER_REV * TACH_SAMPLE_PERIOD_MS);
+			fan_tach_count[i] = 0;
+		}
+		fan_tach_polls = 0;
+	}
+
+	k_work_schedule(&fan_tach_poll_work, K_MSEC(TACH_POLL_MS));
+}
 #endif /* HAS_FAN_TACH */
 
 int fan_set_duty(int fan_num, int duty_pct)
@@ -181,14 +179,9 @@ int fan_init(void)
 			continue;
 		}
 		gpio_pin_configure_dt(&fan_tach_gpio[i], GPIO_INPUT);
-		gpio_pin_interrupt_configure_dt(&fan_tach_gpio[i],
-						GPIO_INT_EDGE_TO_ACTIVE);
-		gpio_init_callback(&fan_tach_cb[i], fan_tach_isrs[i],
-				   BIT(fan_tach_gpio[i].pin));
-		gpio_add_callback(fan_tach_gpio[i].port, &fan_tach_cb[i]);
 	}
-	k_work_schedule(&fan_tach_work, K_MSEC(TACH_SAMPLE_PERIOD_MS));
-	LOG_INF("Fan tachometer initialized");
+	k_work_schedule(&fan_tach_poll_work, K_MSEC(TACH_POLL_MS));
+	LOG_INF("Fan tachometer initialized (polling, %dms)", TACH_POLL_MS);
 #endif
 
 	LOG_INF("Fan control initialized (%d fans, default %d%%)",
