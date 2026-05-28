@@ -135,7 +135,7 @@ int board_identity_init(void)
 	}
 
 	size_t crc_len = offsetof(struct carrier_board_info, crc32);
-	uint32_t calc_crc = crc32_ieee((const uint8_t *)&cbinfo, crc_len);
+	uint32_t calc_crc = ~crc32_ieee_update(0, (const uint8_t *)&cbinfo, crc_len);
 
 	if (calc_crc != cbinfo.crc32) {
 		LOG_WRN("EEPROM CRC mismatch: calc=0x%08x stored=0x%08x",
@@ -146,7 +146,7 @@ int board_identity_init(void)
 			cbinfo_valid = false;
 			return -EINVAL;
 		}
-		calc_crc = crc32_ieee((const uint8_t *)&cbinfo, crc_len);
+		calc_crc = ~crc32_ieee_update(0, (const uint8_t *)&cbinfo, crc_len);
 		if (calc_crc != cbinfo.crc32) {
 			LOG_ERR("Backup EEPROM CRC also invalid");
 			cbinfo_valid = false;
