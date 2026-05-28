@@ -239,6 +239,21 @@ static void send_reply(int fd, const struct hfp_message *req,
 		log_msg(LOG_ERR, "write reply: %s", strerror(errno));
 }
 
+static void send_notify(int fd, uint8_t cmd)
+{
+	struct hfp_message msg;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.header = HFP_MAGIC_HEADER;
+	msg.msg_type = HFP_MSG_NOTIFY;
+	msg.cmd_type = cmd;
+	msg.tail = HFP_MAGIC_TAIL;
+	msg.checksum = hfp_checksum(&msg);
+
+	write_exact(fd, &msg, sizeof(msg));
+	tcdrain(fd);
+}
+
 static void handle_request(int fd, const struct hfp_message *req)
 {
 	struct hfp_message reply;
@@ -266,16 +281,20 @@ static void handle_request(int fd, const struct hfp_message *req)
 		log_msg(LOG_INFO, "BMC requested poweroff");
 		send_reply(fd, req, HFP_RESULT_OK, NULL, 0);
 		tcdrain(fd);
-		execl("/sbin/poweroff", "poweroff", NULL);
-		log_msg(LOG_ERR, "execl poweroff: %s", strerror(errno));
+		if (system("/sbin/poweroff") != 0)
+			log_msg(LOG_ERR, "poweroff failed");
+		send_notify(fd, HFP_CMD_POWER_OFF);
+		running = 0;
 		break;
 
 	case HFP_CMD_RESTART:
 		log_msg(LOG_INFO, "BMC requested reboot");
 		send_reply(fd, req, HFP_RESULT_OK, NULL, 0);
 		tcdrain(fd);
-		execl("/sbin/reboot", "reboot", NULL);
-		log_msg(LOG_ERR, "execl reboot: %s", strerror(errno));
+		if (system("/sbin/reboot") != 0)
+			log_msg(LOG_ERR, "reboot failed");
+		send_notify(fd, HFP_CMD_RESTART);
+		running = 0;
 		break;
 
 	default:

@@ -524,16 +524,20 @@ config SOM_KEEPALIVE_STACK_SIZE
 
 config GRACEFUL_SHUTDOWN_TIMEOUT_MS
 	int "Graceful shutdown timeout (ms)"
-	default 6000
+	default 60000
 	depends on SOM_PROTOCOL
 	help
-	  Time to wait for SOM to acknowledge shutdown before forcing
-	  power off.
+	  Time to wait for SOM to send shutdown NOTIFY before forcing
+	  power off. Linux shutdown can take 30+ seconds for service
+	  stops and filesystem sync.
 
 config GRACEFUL_REBOOT_TIMEOUT_MS
 	int "Graceful reboot timeout (ms)"
-	default 5000
+	default 60000
 	depends on SOM_PROTOCOL
+	help
+	  Time to wait for SOM to send reboot NOTIFY before forcing
+	  reset. Linux reboot can take 30+ seconds.
 
 endif # SOM_PROTOCOL
 
