@@ -262,6 +262,22 @@ static void handle_request(int fd, const struct hfp_message *req)
 			log_msg(LOG_ERR, "write reply: %s", strerror(errno));
 		break;
 
+	case HFP_CMD_POWER_OFF:
+		log_msg(LOG_INFO, "BMC requested poweroff");
+		send_reply(fd, req, HFP_RESULT_OK, NULL, 0);
+		tcdrain(fd);
+		execl("/sbin/poweroff", "poweroff", NULL);
+		log_msg(LOG_ERR, "execl poweroff: %s", strerror(errno));
+		break;
+
+	case HFP_CMD_RESTART:
+		log_msg(LOG_INFO, "BMC requested reboot");
+		send_reply(fd, req, HFP_RESULT_OK, NULL, 0);
+		tcdrain(fd);
+		execl("/sbin/reboot", "reboot", NULL);
+		log_msg(LOG_ERR, "execl reboot: %s", strerror(errno));
+		break;
+
 	default:
 		log_msg(LOG_DEBUG, "unsupported cmd 0x%02x", req->cmd_type);
 		send_reply(fd, req, HFP_RESULT_UNSUPPORTED, NULL, 0);
