@@ -14,7 +14,7 @@
 
 static uint32_t vendor_crc32(const uint8_t *data, size_t len)
 {
-	return ~crc32_ieee_update(0, data, len);
+	return crc32_ieee_update(0xFFFFFFFF, data, len);
 }
 
 #include "board_identity.h"
@@ -141,35 +141,11 @@ int board_identity_init(void)
 
 	size_t crc_len = offsetof(struct carrier_board_info, crc32);
 
-	uint8_t raw_buf[51];
-
-	ret = eeprom_read(eeprom_dev, 0, raw_buf, sizeof(raw_buf));
-	if (ret == 0) {
-		uint32_t raw_stored = raw_buf[47] | (raw_buf[48] << 8) |
-			(raw_buf[49] << 16) | (raw_buf[50] << 24);
-		uint32_t raw_v = vendor_crc32(raw_buf, 47);
-		uint32_t raw_i = crc32_ieee(raw_buf, 47);
-		uint32_t raw_u0 = crc32_ieee_update(0, raw_buf, 47);
-		uint32_t raw_uf = crc32_ieee_update(0xFFFFFFFF, raw_buf, 47);
-
-		LOG_INF("raw[0..7]: %02x %02x %02x %02x %02x %02x %02x %02x",
-			raw_buf[0], raw_buf[1], raw_buf[2], raw_buf[3],
-			raw_buf[4], raw_buf[5], raw_buf[6], raw_buf[7]);
-		LOG_INF("raw[44..50]: %02x %02x %02x %02x %02x %02x %02x",
-			raw_buf[44], raw_buf[45], raw_buf[46],
-			raw_buf[47], raw_buf[48], raw_buf[49], raw_buf[50]);
-		LOG_INF("raw CRC: ~upd(0)=0x%08x ~upd(FF)=0x%08x upd(0)=0x%08x upd(FF)=0x%08x stored=0x%08x",
-			~raw_u0, ~raw_uf, raw_u0, raw_uf, raw_stored);
-	}
-
 	uint32_t calc_crc = vendor_crc32((const uint8_t *)&cbinfo, crc_len);
 
 	if (calc_crc != cbinfo.crc32) {
-		calc_crc = crc32_ieee((const uint8_t *)&cbinfo, crc_len);
-	}
-
-	if (calc_crc != cbinfo.crc32) {
-		LOG_WRN("EEPROM CRC mismatch: stored=0x%08x", cbinfo.crc32);
+		LOG_WRN("EEPROM CRC mismatch: calc=0x%08x stored=0x%08x",
+			calc_crc, cbinfo.crc32);
 		ret = eeprom_read(eeprom_dev, 80, &cbinfo, sizeof(cbinfo));
 		if (ret < 0 || cbinfo.magic != CBINFO_MAGIC) {
 			LOG_ERR("Backup EEPROM also invalid");
@@ -177,9 +153,6 @@ int board_identity_init(void)
 			return -EINVAL;
 		}
 		calc_crc = vendor_crc32((const uint8_t *)&cbinfo, crc_len);
-		if (calc_crc != cbinfo.crc32) {
-			calc_crc = crc32_ieee((const uint8_t *)&cbinfo, crc_len);
-		}
 		if (calc_crc != cbinfo.crc32) {
 			LOG_ERR("Backup EEPROM CRC also invalid");
 			cbinfo_valid = false;
