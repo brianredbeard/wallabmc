@@ -21,6 +21,7 @@ LOG_MODULE_REGISTER(wallabmc_power);
 int power_reset(void);
 #ifdef CONFIG_SOM_PROTOCOL
 static void power_graceful_init(void);
+int power_graceful_off(void);
 #endif
 
 #define GPIO_POWER_1 DT_ALIAS(power_gpio_1)
