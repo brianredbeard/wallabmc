@@ -1562,19 +1562,30 @@ static int system_reset_post_handler(struct http_resource_user_data *user_data)
 	LOG_INF("Reset Action: %s", payload.reset_type);
 
 	if (strcmp(payload.reset_type, "On") == 0) {
-		power_set_state(true);
+		ret = power_set_state(true);
 	} else if (strcmp(payload.reset_type, "ForceOff") == 0) {
-		power_set_state(false);
+		ret = power_set_state(false);
 	} else if (strcmp(payload.reset_type, "ForceRestart") == 0 ||
 		   strcmp(payload.reset_type, "PowerCycle") == 0) {
-		power_reset();
+		ret = power_reset();
 	} else if (strcmp(payload.reset_type, "GracefulShutdown") == 0) {
-		power_graceful_off();
+		ret = power_graceful_off();
 	} else if (strcmp(payload.reset_type, "GracefulRestart") == 0) {
-		power_graceful_restart();
+		ret = power_graceful_restart();
 	} else {
 		LOG_ERR("ComputerSystem.Reset: Bad reset type");
 		return HTTP_400_BAD_REQUEST;
+	}
+
+	if (ret == -ENOTSUP) {
+		LOG_ERR("ComputerSystem.Reset: %s not supported",
+			payload.reset_type);
+		return HTTP_400_BAD_REQUEST;
+	}
+	if (ret < 0) {
+		LOG_ERR("ComputerSystem.Reset: %s failed: %d",
+			payload.reset_type, ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
 	}
 
 	return 0;
