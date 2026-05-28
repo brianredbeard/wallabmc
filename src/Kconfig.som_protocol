@@ -16,7 +16,7 @@ if SOM_PROTOCOL
 
 config SOM_PROTOCOL_STACK_SIZE
 	int "SOM protocol thread stack size"
-	default 1024
+	default 2048
 
 config SOM_PROTOCOL_PRIORITY
 	int "SOM protocol thread priority"
