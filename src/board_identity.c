@@ -62,8 +62,12 @@ static int cmd_board_info(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	if (!cbinfo_valid) {
-		shell_error(sh, "Board identity not available");
-		return -ENODATA;
+		shell_print(sh, "Retrying EEPROM read...");
+		int rc = board_identity_init();
+		if (rc < 0) {
+			shell_error(sh, "Board identity not available (err %d)", rc);
+			return rc;
+		}
 	}
 
 	shell_print(sh, "--- Carrier Board Info ---");
@@ -101,7 +105,12 @@ int board_identity_init(void)
 	if (gpio_is_ready_dt(&i2c_mux_gpio)) {
 		gpio_pin_configure_dt(&i2c_mux_gpio, GPIO_OUTPUT_ACTIVE);
 		gpio_pin_set_dt(&i2c_mux_gpio, 1);
+		k_msleep(10);
+	} else {
+		LOG_WRN("I2C mux GPIO not ready");
 	}
+#else
+	LOG_WRN("I2C mux GPIO not configured in DTS");
 #endif
 
 #if DT_NODE_EXISTS(EEPROM_WP_NODE)
