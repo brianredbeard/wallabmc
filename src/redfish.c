@@ -825,6 +825,8 @@ static int manager_patch_handler(struct http_resource_user_data *user_data)
 	struct redfish_manager payload;
 	int ret;
 
+	memset(&payload, 0, sizeof(payload));
+
 	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
 			     manager_descr, ARRAY_SIZE(manager_descr), &payload);
 	if (ret < 0) {
@@ -1157,8 +1159,9 @@ static int network_protocol_patch_handler(struct http_resource_user_data *user_d
 	}
 
 	if (payload.ntp.ntp_servers_count != -1) {
-		/* If count is 0 then the address will be 0 (which clears the static IP) */
-		ret = config_bmc_ntp_server_set(payload.ntp.ntp_servers[0]);
+		const char *server = (payload.ntp.ntp_servers_count > 0)
+			? payload.ntp.ntp_servers[0] : "";
+		ret = config_bmc_ntp_server_set(server);
 		if (ret) {
 			LOG_ERR("Failed to set NTP server address (err=%d)", ret);
 			return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -1470,6 +1473,11 @@ static int system_reset_post_handler(struct http_resource_user_data *user_data)
 			     reset_descr, ARRAY_SIZE(reset_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("ComputerSystem.Reset: Bad JSON (err=%d)", ret);
+		return HTTP_400_BAD_REQUEST;
+	}
+
+	if (!payload.reset_type) {
+		LOG_ERR("ComputerSystem.Reset: missing ResetType");
 		return HTTP_400_BAD_REQUEST;
 	}
 

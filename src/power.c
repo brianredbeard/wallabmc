@@ -137,7 +137,7 @@ static int power_off(void)
 	return 0;
 }
 
-void power_set_state(bool on)
+int power_set_state(bool on)
 {
 	int ret;
 
@@ -148,10 +148,11 @@ void power_set_state(bool on)
 
 	if (ret < 0) {
 		LOG_ERR("Failed to set power state: %d", ret);
-		return;
+		return ret;
 	}
 
 	LOG_INF("System Power State changed to: %s", power_get_state() ? "ON" : "OFF");
+	return 0;
 }
 
 int power_init(void)

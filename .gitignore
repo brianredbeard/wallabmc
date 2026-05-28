@@ -2,3 +2,5 @@ build/
 build-*/
 build-*.hex
 *.signed.hex
+host/somd/somd
+host/somd/test_protocol
